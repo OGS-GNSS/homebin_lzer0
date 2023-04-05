@@ -1,0 +1,105 @@
+#!/bin/tcsh
+#
+# Script to compress both MASTER and ROVER hourly GNSS data
+# created by DZ (Aug 2022)
+#
+#********************  DEFAULTS ********************
+set JOB		= `basename $0`
+set CURDIR	= `pwd`
+set path = ($path /usr/sbin /sbin /usr/local/bin /usr/bin /bin /home/${user}/bin .) #fundamental to run  scripts inside cron without full path commands
+#
+#********************  TUNING VARIABLES BEGIN ********************
+set STORAGE		= /mnt/hd
+set DUMPDIR		= ${STORAGE}/gnss
+#
+# DEFAULT PARAMS
+set YEAR  = `date +%Y`
+set DOY   = `date +%j`
+set HOUR  = `date +%H`
+set SES   = `echo $HOUR | hr2ses`
+set FORCE = "N"
+set PHOURS = ""
+#********************  TUNING VARIABLES END  ********************
+#
+# If no arguments are passed it outputs script usage
+if (${%argv} == 0) then
+        echo "- USAGE: $JOB  -f [CFGFILE] -y [YEAR] -d [DOY] -h [HOUR] -l [SESSION] -p [NHOURS] -w"
+        echo "  -w: to overwrite old files"
+        echo "  [NHOURS]: previous hours to compress"
+        echo "  e.g: $JOB -f $HOME/cfg/sites.cfg"
+        echo "  e.g: $JOB -f $HOME/cfg/sites.cfg -y 2022"
+        echo "  e.g: $JOB -f $HOME/cfg/sites.cfg -y 2022 -h 12"
+        exit 1
+endif
+#
+#
+# check command line params.
+while($#)
+        switch($1)
+		case "-y":
+			# Year
+                        shift
+			set YEAR = $1
+			breaksw
+                case "-d":
+                        # DOY
+                        shift
+                        set DOY = $1
+                        breaksw
+                case "-h":
+                        # Hour and session
+                        shift
+                        set HOUR = $1
+			set SES  = `echo $HOUR | hr2ses`
+                        breaksw
+                case "-l":
+                        # Session and hour
+                        shift
+                        set SES  = `echo $1 | tr 'a-z' 'A-Z'`
+                        set HOUR = `echo $SES | hr2ses`
+                        breaksw
+                case "-p":
+                        #  Number of previous hours to compress
+                        shift
+			set PHOURS = $1
+                        breaksw
+                case "-w":
+                        #  overwrite old file
+                        set FORCE  = "Y"
+                        breaksw
+                case "-f":
+                        #  get receiver name from config file
+			shift
+                        set cfgFile     = $1
+                        set SITES	= `cat $cfgFile | grep -v "#" | gawk '{if ($2=="name:") {print $3}}' | tr -d " " | tr "a-z" "A-Z"`
+                        breaksw
+		default:
+			shift
+			breaksw
+        endsw
+        shift
+end
+if ($#SITES == 0) then
+        echo "- Warning, you must provide at least the config file"
+        exit
+else
+endif
+foreach SITE ($SITES)
+	echo "- $SITE compressing now."
+	switch($FORCE)
+		case "Y":
+			if ($PHOURS == "") then
+				lzer0.compress.hourlygnss -s $SITE -y $YEAR -d $DOY -h $HOUR -l $SES -w
+			else
+				lzer0.compress.hourlygnss -s $SITE -p $PHOURS -w
+			endif
+                        breaksw
+                default:
+			if ($PHOURS == "") then
+				lzer0.compress.hourlygnss -s $SITE -y $YEAR -d $DOY -h $HOUR -l $SES
+			else
+				lzer0.compress.hourlygnss -s $SITE -p $PHOURS
+			endif
+                        breaksw
+        endsw
+end

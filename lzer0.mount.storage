@@ -1,0 +1,14 @@
+#!/bin/tcsh
+# created by DZ (Nov 2018)
+#
+#********************  DEFAULTS ********************
+set JOB         = `basename $0`
+set CURDIR      = `pwd`
+set EXTDISK     = /mnt/hd
+set STORAGE     = ${EXTDISK}/gnss
+#
+#mount ${EXTDISK} >& /dev/null
+mount ${EXTDISK}
+if (! -e ${STORAGE}) then
+        mkdir -p ${STORAGE}
+endif

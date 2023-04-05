@@ -1,0 +1,37 @@
+#!/bin/tcsh 
+# created  by DZ (Mar 2017)
+# modifide by DZ (Aug 2022)
+set JOB 			= `basename $0`
+#
+# If no arguments are passed it outputs script usage
+if (${%argv} == 0) then
+        echo "- USAGE: $JOB -f [config file]"
+        echo "    e.g: $JOB -f $HOME/cfg/rtkrcv.curr.conf"
+        exit 1
+endif
+#
+# check command line params.
+while($#)
+        switch($1)
+                case "-f":
+                        shift
+                        set cfgFile     = $1
+                        breaksw
+                default:
+                        breaksw
+        endsw
+        shift
+end
+set RUNNINGSCRIPT 		= rtkrcv
+set KEYWORD1 			= 2950
+set KEYWORD2 			= $cfgFile
+set RUNNINGSCRIPT_STATUS 	= `ps -ef | grep $RUNNINGSCRIPT | grep $KEYWORD1 |  grep $KEYWORD1 | grep -v $JOB | grep -v grep | wc -l`
+set RUNNINGSCRIPT_PID    	= `ps -ef | grep $RUNNINGSCRIPT | grep $KEYWORD1 |  grep $KEYWORD1 | grep -v $JOB | grep -v grep | gawk '{print $2}'`
+#
+# CHECK.
+if ( $RUNNINGSCRIPT_STATUS) then
+        echo $RUNNINGSCRIPT is runnning with PID $RUNNINGSCRIPT_PID
+else
+	echo "$RUNNINGSCRIPT not running. Starting now!"
+        $HOME/bin/lzer0.start.rtk -f $cfgFile
+endif

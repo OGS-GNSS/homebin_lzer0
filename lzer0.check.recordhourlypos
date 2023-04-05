@@ -1,0 +1,50 @@
+#!/bin/tcsh
+# Script to check the lzer0.record.hourlypos status and to run it if it si stopped
+# created  by DZ (Nov 2018)
+# modified by DZ (Nov 2022)
+# to check pos streams from str2str to file
+#
+# Defaults
+set JOB         = `basename $0`
+#
+# If no arguments are passed it outputs script usage
+if (${%argv} == 0) then
+        echo "- USAGE: $JOB -f [config file]"
+        echo "- USAGE: $JOB -s [SITE]"
+        echo "    e.g: $JOB -f $HOME/cfg/sites.cfg"
+        echo "    e.g: $JOB -s L001"
+        exit 1
+endif
+#
+# check command line params.
+while($#)
+        switch($1)
+                case "-s":
+                        # Site name
+                        shift
+                        set SITE = `echo $1 | tr 'a-z' 'A-Z'`
+                        breaksw
+                case "-f":
+                        #  get receiver name from config file
+                        shift
+                        set cfgFile     = $1
+                        set SITE    = `cat $cfgFile | grep -v "#" | gawk 'BEGIN{FS=":"} {if ($1=="site name") {print $2}}' | tr -d " " | tr "a-z" "A-Z"`
+                        breaksw
+                default:
+                        breaksw
+        endsw
+        shift
+end
+set RUNNINGSCRIPT = str2str
+set KEYWORD1 = $SITE
+set KEYWORD2 = 5754
+set RUNNINGSCRIPT_STATUS        = `ps -ef | grep $RUNNINGSCRIPT | grep $KEYWORD1 | grep $KEYWORD2 | grep -v $JOB | grep -v grep | wc -l`
+set RUNNINGSCRIPT_PID           = `ps -ef | grep $RUNNINGSCRIPT | grep $KEYWORD1 | grep $KEYWORD2 | grep -v $JOB | grep -v grep | gawk '{print $2}'`
+#
+# CHECK.
+if ( $RUNNINGSCRIPT_STATUS) then
+        echo $RUNNINGSCRIPT is running with PID $RUNNINGSCRIPT_PID
+else
+        echo $RUNNINGSCRIPT is stopped... Restarting now!
+        $HOME/bin/lzer0.record.hourlypos -s $SITE
+endif

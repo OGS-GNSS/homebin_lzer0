@@ -1,0 +1,53 @@
+#!/bin/tcsh
+# created by D. Zuliani (April 2004)
+
+# base settings
+set path = ($path /opt/bin /usr/local/sbin /usr/sbin \
+                  /sbin /usr/local/bin /usr/bin /bin \
+                  /usr/X11R6/bin /opt/www/htdig/bin  \
+                  /opt/kde/bin /usr/lib/qt-3.0.4/bin \
+                  /usr/share/texmf/bin /home/frednet/bin .)
+set JOB = `basename $0`
+
+# Script usage
+if ($1 == "" || $# > 1) then
+   set USAGE = "\n"
+   set USAGE = "$USAGE""USAGE:"
+   set USAGE = "$USAGE""\n""`basename $0` [PID number]"
+   set USAGE = "$USAGE""\n""use $JOB for killing JOB with [PID number] and its children"
+   echo $USAGE
+   exit 1
+endif
+
+# Capture PID number from line input
+set PIDFATHER = $1
+
+# Check if the process exits
+if  (`ps -ef | gawk -v pid_main=$PIDFATHER '{if ($2==pid_main) print $0}' | wc -l`) then
+else
+    echo "Process: $PIDFATHER not active"
+    exit 1
+endif
+
+# iteratively find out the process and its children
+set PIDSCHILDREN = `ps -ef | gawk -v pid_father=$PIDFATHER '{if ($3==pid_father) print $2}'`
+if ($#PIDSCHILDREN != 0) then   
+   foreach PIDTODEL ($PIDSCHILDREN)
+        kill_family $PIDTODEL
+   end
+else
+endif
+
+#  KILLING
+set PROC_NAME = `ps -a | gawk -v pid_father=$PIDFATHER '{if ($1==pid_father) print $4}'`
+echo "killing: $PIDFATHER --> $PROC_NAME"
+if (`ps -ef | gawk -v pid_main=$PIDFATHER '{if ($2==pid_main) print $0}' | wc -l`) then
+   kill -9 $PIDFATHER
+   if (! $?) then
+      echo "Process: $PIDFATHER --> $PROC_NAME killed"
+   else
+      echo "Process: $PIDFATHER --> $PROC_NAME kill Fail"
+   endif
+else 
+   echo "Process: $PIDFATHER previously killed"
+endif

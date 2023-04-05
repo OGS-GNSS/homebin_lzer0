@@ -1,0 +1,95 @@
+#!/bin/tcsh
+# Script to replace the current rtkrcfg confing with one included in the cfg dir. It restarts the rtkrcv engine
+# created  by DZ (Jul 2016)
+# modified by DZ (May 2019)
+# modified by DZ (Aug 2021)
+# modified by DZ (Aug 2022)
+#
+#********************  DEFAULTS ********************
+set JOB		= `basename $0`
+set CURDIR	= `pwd`
+set CFGDIR 	= ${HOME}/cfg
+set CFGFILE 	= ${CFGDIR}/sites.cfg
+set DAEMON      = /usr/local/bin/rtkrcv
+set TMP 	= ${HOME}/tmp/tmp.$JOB
+set rawFileType = ""
+set siteName 	= ""
+set CFG_FILE_CUR = ${CFGDIR}/rtkrcv.curr.conf
+#
+# Checking TMP dir
+if ( ! -e $TMP) then
+        mkdir -p $TMP
+else
+endif
+#
+# Getting site name from site config file
+set siteName  = `cat $CFGFILE | grep -v "#" | gawk 'BEGIN{FS=":"} {if ($1=="rover name") {print $2}}' | tr -d " " | tr "a-z" "A-Z"`
+#
+# Getting site coordinates from site config file
+set siteCoords  = `cat $CFGFILE | grep -v "#" | gawk 'BEGIN{FS=":"} {if ($1=="rover coordinates") {print $2}}' | tr -d " "`
+#
+# If no argumets outputs current site name and list of available rtkrcv config files
+if (${%argv} == 0) then
+	echo "- Current site name: $siteName"
+	echo "- Current site coordinates: $siteCoords"
+	echo "- Available rtkrcv config files"
+	foreach fileName (${CFGDIR}/*.conf)
+		set progName = `basename $DAEMON`
+		echo "  $fileName" | grep -v $CFG_FILE_CUR | grep $progName
+	end
+	echo "- USAGE: $JOB -f [config file]"
+	exit 1
+endif
+#
+# check command line params. First one is used to set the site name, second one for brand #U for ublox
+while($#)
+        switch($1)
+                case "-f":
+                        shift
+			set cfgFileSrc = $1
+			breaksw
+		default:
+			breaksw
+	endsw
+	shift
+end
+#
+# Getting type of GNSS data to be recodred into local repository deifined inside the conf file
+set rawFileType = `cat $cfgFileSrc | grep "inpstr1-format" | gawk 'BEGIN{FS="="} {print substr($2,1,1)}' | tr 'a-z' 'A-Z'`
+#
+# Last check before doing the final job
+if ( ${%siteName} == 0 ) then
+	echo "- Error! Check site name inside $CFGFILE"
+	exit 1
+else
+endif
+if ( ${%rawFileType} == 0 ) then
+        echo "- Error. Check inpstr1-format inside $cfgFileSrc"
+	exit 1
+else
+endif
+#
+# Working with the rtkrcv conf file
+set isConfOk = `cat $cfgFileSrc | grep logstr1-path | grep GPS0 | wc -l`
+if ( $isConfOk > 0 ) then
+	cp $cfgFileSrc $CFG_FILE_CUR
+	sed -i -e "s/GPS0/${rawFileType}${siteName}/g" $CFG_FILE_CUR
+else
+	echo "- Error. Check inpstr1-format inside $cfgFileSrc. GPS0 keyword must be used."
+endif
+#
+# TMP cleaning
+rm -fR ${TMP} >& /dev/null
+#
+# killing active process e leave it run again after the 60 sec by crontab
+set Running = `ps -ef | grep $DAEMON | grep -v grep | wc -l`
+set Pid     = `ps -ef | grep $DAEMON | grep -v grep | gawk '{print $2}'`
+if($Running) then
+	foreach CurPid ($Pid)
+		kill_family $Pid >& /dev/null
+        end
+endif
+#
+# force a new run
+echo "- Starting: ${HOME}/bin/lzer0.start.rtkrcv with cfg: $CFG_FILE_CUR"
+${HOME}/bin/lzer0.start.rtk -f $CFG_FILE_CUR
