@@ -40,11 +40,11 @@
 @reboot sleep 40; /home/lzer0/bin/lzer0.tcp2file.ubx -f /home/lzer0/cfg/site.cfg >> /home/lzer0/log/lzer0.tcp2file.ubx.log 2>&1
 #
 # GNSS data set management
-0 * * * * sleep 5; /home/lzer0/bin/lzer0.compress.hourlygnss -f /home/lzer0/cfg/site.cfg >> /home/lzer0/log/lzer0.compress.hourlygnss.log 2>&1
+0 * * * * sleep 5; /home/lzer0/bin/lzer0.compress.hourlygnss -s TEST -f /home/lzer0/cfg/site.cfg >> /home/lzer0/log/lzer0.compress.hourlygnss.log 2>&1
 30 */6 * * * /home/lzer0/bin/lzer0.compress.hourlygnss -f /home/lzer0/cfg/site.cfg -p 96 >> /home/lzer0/log/lzer0.compress.hourlygnss.log 2>&1
 #
 # GNSS real time processing (it must start at reboot and later on lzer0.ser2tcp.ubx and lzer0.tcp2file.ubx)
-@reboot sleep 45; /home/lzer0/bin/lzer0.start.rtkrcv -f /home/lzer0/cfg/rtkrcv.curr.conf >> /home/lzer0/log/lzer0.start.rtkrcv.log  2>&1
+@reboot sleep 45; /home/lzer0/bin/lzer0.start.rtk -f /home/lzer0/cfg/rtkrcv.curr.conf >> /home/lzer0/log/lzer0.start.rtk.log  2>&1
 * * * * * /home/lzer0/bin/lzer0.check.rtkrcv -f /home/lzer0/cfg/rtkrcv.curr.conf >> /home/lzer0/log/lzer0.check.rtkrcv.log  2>&1
 #
 # GNSS real time processing pos recording (it must start at reboot and later on lzer0.start.rtkrcv)

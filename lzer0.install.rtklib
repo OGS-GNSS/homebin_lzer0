@@ -8,7 +8,7 @@ set CURDIR      = `pwd`
 set RTKLIBPATH  = $HOME/tmp/RTKLIB
 #
 #********************  TUNING VARIABLES BEGIN ********************
-set PROG_VER	= RTKLIB-b34f # the version must match one created by lzer0.make.rtklib
+set PROG_VER	= RTKLIB-b34g # the version must match one created by lzer0.make.rtklib
 set PROGS	= (rtkrcv str2str rnx2rtkp convbin pos2kml)
 #********************  TUNING VARIABLES END   ********************
 #

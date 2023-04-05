@@ -8,7 +8,7 @@ set CURDIR	= `pwd`
 set RTKLIBPATH  = $HOME/tmp/RTKLIB
 #
 #********************  TUNING VARIABLES BEGIN ********************
-set PROG_VERS 	= (RTKLIB-b34f) # if you have more versions to compile add their names inside round brackets
+set PROG_VERS 	= (RTKLIB-b34g) # if you have more versions to compile add their names inside round brackets
 set PROGS 	= (rtkrcv str2str rnx2rtkp convbin pos2kml)
 #********************  TUNING VARIABLES END   ********************
 #
