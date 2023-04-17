@@ -28,7 +28,7 @@ while($#)
                         #  get receiver name from config file
                         shift
                         set cfgFile     = $1
-                        set SITE    = `cat $cfgFile | grep -v "#" | gawk 'BEGIN{FS=":"} {if ($1=="site name") {print $2}}' | tr -d " " | tr "a-z" "A-Z"`
+                        set SITE    = `cat $cfgFile | grep -v "#" | gawk 'BEGIN{FS=":"} {if ($1=="rover name") {print $2}}' | tr -d " " | tr "a-z" "A-Z"`
                         breaksw
                 default:
                         breaksw
