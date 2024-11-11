@@ -1,0 +1,1 @@
+COPY ALL IN YOUR ${HOME}/bin
