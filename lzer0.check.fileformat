@@ -1,0 +1,56 @@
+#!/bin/tcsh
+#
+# Script to discover the GNSS file format (ubx, rtcm, etc).
+# created  by DZ (Apr 2019)
+# modified by DZ (Aug 2022)
+#
+#********************  DEFAULTS ********************
+set JOB		= `basename $0`
+set CURDIR	= `pwd`
+set TMPDIR      = ${HOME}/tmp/tmp.${JOB}
+set JOB_MON 	= convbin
+set KEYWORD 	= test.o
+set formats 	= (ubx rtcm3 rtcm2 nvs rinex nov oem3 ss2 hemis stq javad binex)
+#********************  TUNING VARIABLES END  ********************
+#
+# check command line params. First one is used to set the site name, second one for brand
+while($#)
+        switch($1)
+                case "-f":
+                        #raw File name
+                        shift
+                        set rawFile = $1
+                        breaksw
+                default:
+                        shift
+                        breaksw
+        endsw
+        shift
+end
+if ( $?rawFile ) then
+	if ( ! -e $rawFile) then
+		echo "USAGE: $JOB -f [file to check]"
+		exit
+	else
+		mkdir -p $TMPDIR
+		rm -fR $TMPDIR/* >& /dev/null
+	endif
+else
+	echo "USAGE: $JOB -f [file to check]"
+	exit
+endif
+foreach format ($formats)
+	($JOB_MON -r $format $rawFile -o ${TMPDIR}/${KEYWORD} > /dev/null &) >& /dev/null
+	sleep 8 #needed for bug files (e.g 20MB of raw data)
+	set PidsMonJob = `ps -ef | grep $KEYWORD | gawk -v JOB_MON=${JOB_MON} '{if ($8==JOB_MON) {print $2}}'`
+	foreach PidMonJob ($PidsMonJob)
+        	(kill_family ${PidMonJob} > /dev/null) >& /dev/null
+	end
+	if ( -e ${TMPDIR}/$KEYWORD) then
+		if ( ! -z ${TMPDIR}/$KEYWORD) then
+   			echo "$format"
+			rm -fR  ${TMPDIR}
+			exit
+		endif
+	endif
+end

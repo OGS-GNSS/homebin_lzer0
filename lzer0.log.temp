@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# Percorso del file di log
+AM_PM=$(date '+%p')
+LOG_FILE="/home/lzer0/log/report_temp_and_process-$(date +%Y-%m-%d)-${AM_PM}"
+
+# Data e ora attuali
+DATE_TIME=$(date '+%Y-%m-%d %H:%M:%S')
+
+# Stato della CPU
+CPU_LOAD=$(top -b -n1 | grep "Cpu(s)" )
+
+# Temperatura CPU_LOAD
+CPU_TEMP=$(vcgencmd measure_temp)
+
+# Processi più impegnativi
+TOP_PROCESSES=$(top -b -o %CPU -n1 | head -n 12 | tail -n 5 | awk '{print $1, $12, $9}')
+
+# Verifica processo gzip e determinazione PID padre
+#GZIP_PID=$(pgrep python3)
+#if [ ! -z "$GZIP_PID" ]; then
+#  PARENT_PID=$(ps -ef -o ppid= -p $GZIP_PID | awk '{print $1}')
+#  PARENT_PROCESS=$(ps -o comm= -p $PARENT_PID)
+#else
+#  PARENT_PROCESS="Nessun processo gzip trovato"
+#fi
+
+# Scrivere nel file di log
+{
+  echo "======================[ $DATE_TIME ]===================="
+  echo ""
+  echo "$CPU_LOAD"
+  echo "$CPU_TEMP"
+  echo "Top 5 processes by CPU usage:"
+  echo "$TOP_PROCESSES"
+  echo ""
+ # echo "Parent process of gzip (if any): $PARENT_PROCESS"
+
+} >> $LOG_FILE
+

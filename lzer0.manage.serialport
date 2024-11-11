@@ -1,0 +1,68 @@
+#!/bin/tcsh
+# created by DZ (Aug 2022)
+# gives control for the port of the GNSS to str2str (started at boot) or ser2net
+#
+#********************  DEFAULTS ********************
+set path = ($path /usr/sbin /sbin /usr/local/bin /usr/bin /bin /home/${user}/bin .) #fundamental to run  scripts inside cron without full path commands
+set JOB         		= `basename $0`
+set CURDIR      		= `pwd`
+set KEYWORDS			= (ser2net str2str)
+set DEVMANPERFIX 		= lzer0.manage
+#
+# If no arguments are passed it outputs script usage
+if (${%argv} == 0) then
+        echo "- USAGE: $JOB  [service/status]"
+	echo "- [service] can be $KEYWORDS"
+        echo "  e.g: $JOB $KEYWORDS[1]"
+        echo "  e.g: $JOB $KEYWORDS[2]"
+        echo "  e.g: $JOB status"
+        exit 1
+endif
+set cmd = $1
+switch($1)
+	case "ser2net":
+		#
+		# running CHECK
+		set status = `$JOB status`
+		if ("$status" == "ser2net") then
+			echo "$DEVMANPERFIX.$KEYWORDS[1] is running. Nothing to do."
+			echo "$DEVMANPERFIX.$KEYWORDS[2] is stopped. Nothing to do."
+		else
+			echo "$DEVMANPERFIX.$KEYWORDS[2] is stopping now."
+			$DEVMANPERFIX.$KEYWORDS[2] stop
+			echo "$DEVMANPERFIX.$KEYWORDS[1] is starting now."
+			$DEVMANPERFIX.$KEYWORDS[1] start
+		endif
+		breaksw
+        case "str2str":
+                #
+                # running CHECK
+		set status = `$JOB status`
+                 if ("$status" == "str2str") then
+                        echo "$DEVMANPERFIX.$KEYWORDS[2] is running. Nothing to do."
+                        echo "$DEVMANPERFIX.$KEYWORDS[1] is stopped. Nothing to do."
+                else
+                        echo "$DEVMANPERFIX.$KEYWORDS[1] is stopping now."
+                        $DEVMANPERFIX.$KEYWORDS[1] stop 
+                        echo "$DEVMANPERFIX.$KEYWORDS[2] is starting now."
+                        $DEVMANPERFIX.$KEYWORDS[2] start
+                endif
+                breaksw
+        case "status":
+		set sta1 = `$DEVMANPERFIX.$KEYWORDS[1] status`
+		set sta2 = `$DEVMANPERFIX.$KEYWORDS[2] status`
+		if (("$sta1" == "1") && ("$sta2" == "0")) then
+			echo $KEYWORDS[1]
+		else
+			if (("$sta1" == "0") && ("$sta2" == "1")) then
+				echo $KEYWORDS[2]
+			else
+				echo unkn
+			endif
+		endif
+		breaksw
+	default:
+		echo "Command not recognized. Nothing to do!"
+		exit 1
+		breaksw
+endsw

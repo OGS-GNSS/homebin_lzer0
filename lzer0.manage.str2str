@@ -1,0 +1,55 @@
+#!/bin/tcsh
+# created by DZ (Aug 2022)
+# manages main str2str stream from the serial port of the GNSS receiver to the TCP port
+#
+#********************  DEFAULTS ********************
+set path = ($path /usr/sbin /sbin /usr/local/bin /usr/bin /bin /home/${user}/bin .) #fundamental to run  scripts inside cron without full path commands
+set JOB         		= `basename $0`
+set CURDIR      		= `pwd`
+set RUNNINGSCRIPT 		= str2str
+set KEYWORD1 			= serial # serial keyword used for input port
+set KEYWORD2 			= 2222   # tcp keyword used for output port
+set RUNNINGSCRIPT_STATUS        = `ps -ef | grep $RUNNINGSCRIPT | grep $KEYWORD1 | grep $KEYWORD2 | grep -v $JOB | grep -v grep | wc -l`
+set RUNNINGSCRIPT_PID           = `ps -ef | grep $RUNNINGSCRIPT | grep $KEYWORD1 | grep $KEYWORD2 | grep -v $JOB | grep -v grep | gawk '{print $2}'`
+#
+# If no arguments are passed it outputs script usage
+if (${%argv} == 0) then
+        echo "- USAGE: $JOB  [start/stop/status/enable/disable]"
+	echo "- start/stop/status to start stop and get the str2str status"
+        echo "    e.g: $JOB start"
+        exit 1
+endif
+set cmd = $1
+switch($1)
+	case "start":
+		#
+		# CHECK if another str2str is running
+		set status = `$JOB status`
+		if ("$status" == "1") then
+        		echo $RUNNINGSCRIPT is runnning with PID $RUNNINGSCRIPT_PID. Stop it before restarting!
+		else
+        		echo $RUNNINGSCRIPT is not running. Restarting now!
+			/home/lzer0/bin/lzer0.ser2tcp.ubx >>& /home/lzer0/log/lzer0.ser2tcp.ubx.log
+		endif
+		breaksw
+        case "stop":
+                #
+                # CHECK if another str2str is running
+		set status = `$JOB status`
+                if ("$status" == "1") then
+                        echo $RUNNINGSCRIPT runnning found with PID $RUNNINGSCRIPT_PID. Stopping now!
+			kill_family $RUNNINGSCRIPT_PID
+                else
+                        echo $RUNNINGSCRIPT is not running. Nothing to do!
+                endif
+		breaksw
+        case "status":
+                #
+                # CHECK if str2net is running
+		echo $RUNNINGSCRIPT_STATUS
+		breaksw
+	default:
+		echo "Command not recognized. Nothing to do!"
+		exit 1
+		breaksw
+endsw

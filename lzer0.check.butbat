@@ -1,0 +1,60 @@
+#! /usr/bin/tcsh
+# the scrip manages raspberry pi GPIO for both power button and battery status monitor
+#
+# Defaults
+set path   = ($path /usr/local/sbin /usr/sbin /sbin /usr/local/bin /usr/bin /bin /home/$USER/bin .)
+set curJob = `basename $0`
+set curPid = $$
+set curDir = `dirname $0`
+set butHandler 	= $HOME/bin/POW_BUT/listen-for-shutdown.py	# power button handler
+set batHandler 	= $HOME/bin/UPS_HAT_C/INA219.oneshot.py 	# battery status handler
+set stopJob	= $HOME/bin/kill_family				# stop job
+#echo "hello I'm alive, my name is $curJob $curPid and I belong to $USER, I live in $curDir but I'm already dead"
+#
+# Working with names and IDs
+set butHandlerName = `basename $butHandler`
+set batHandlerName = `basename $batHandler`
+set butLog 	= $HOME/log/${butHandlerName}.log 		# power button handler log file
+set batLog 	= $HOME/log/${batHandlerName}.log 		# battery status handler log file
+set butHandlerIDs = (`ps -ef | grep -v grep | grep $butHandler | gawk '{print $2}'`)
+set batHandlerIDs = (`ps -ef | grep -v grep | grep $batHandler | gawk '{print $2}'`)
+#
+# Check already running Power Button Handler Daemon
+if ($#{butHandlerIDs} != 0) then
+	foreach  butHandlerID ($butHandlerIDs)
+		echo "$butHandlerName is still running with ID: $butHandlerID, it is going to be stopped"
+		$stopJob $butHandlerID
+		sudo raspi-config nonint do_i2c 1 # disable i2c bus
+		sudo raspi-config nonint do_i2c 0 # enable i2c bus
+		set butHandlerID = `ps -ef | grep -v grep | grep $butHandlerName | gawk '{print $2}'`
+		if ($butHandlerID != "") then
+			echo "$butHandlerName is still running with ID: $butHandlerID, something went wrong. Retry"
+		else
+			echo "$butHandlerName stopped"
+		endif
+	end
+else
+	echo "$butHandlerName is not running"
+endif
+#
+# Check already running Battery Handler Daemon
+if ($#{batHandlerIDs} != 0) then
+	foreach  batHandlerID ($batHandlerIDs)
+        	echo "$batHandlerName is still running with ID: $batHandlerID, it is going to be stopped"
+        	$stopJob $batHandlerID
+        	set batHandlerID = `ps -ef | grep -v grep | grep $batHandlerName | gawk '{print $2}'`
+        	if ($batHandlerID != "") then
+                	echo "$batHandlerName is still running with ID: $batHandlerID, something went wrong. Retry"
+        	else
+                	echo "$batHandlerName stopped"
+        	endif
+	end
+else
+        echo "$batHandlerName is not running"
+endif
+#
+# Start battery log, restart power button reading
+set dateTime = `date "+%Y/%m/%d %T"`
+echo "Date & Time:   $dateTime" >>& $batLog 	# saving date and time to the battery log file
+$batHandler >>& $batLog				# starting battery log, it is a one shot measure, logroate will take care of rotating logs
+nohup $butHandler >>& $butLog &			# it is a continuous measure, logroate will take care of rotating logs

@@ -1,0 +1,20 @@
+#!/bin/tcsh
+# created  by DZ (May 2015)
+# modified by DZ (Aug 2022)
+#
+#********************  DEFAULTS ********************
+set JOB         = `basename $0`
+set CURDIR      = `pwd`
+set RTKLIBPATH  = $HOME/tmp/RTKLIB
+#
+#********************  TUNING VARIABLES BEGIN ********************
+set PROG_VER	= RTKLIB-b34g # the version must match one created by lzer0.make.rtklib
+set PROGS	= (rtkrcv str2str rnx2rtkp convbin pos2kml)
+#********************  TUNING VARIABLES END   ********************
+#
+echo "# $PROG_VER installing."
+set SRC_PATH  = ${RTKLIBPATH}/${PROG_VER}/app/consapp
+foreach PROG ($PROGS)
+	cd ${SRC_PATH}/${PROG}/gcc
+	sudo make install
+end

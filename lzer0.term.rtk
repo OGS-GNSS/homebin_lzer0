@@ -1,0 +1,9 @@
+#!/bin/tcsh -f
+# created  by DZ (Apr 2017)
+# modified by DZ (Aug 2022)
+#
+#********************  DEFAULTS ********************
+set JOB		= `basename $0`
+set CURDIR	= `pwd`
+#
+telnet 127.0.0.1 2950

@@ -1,0 +1,23 @@
+#!/bin/tcsh -xvf
+# created  by DZ (May 2015)
+# modified by DZ (Aug 2022)
+#
+#********************  DEFAULTS ********************
+set JOB		= `basename $0`
+set CURDIR	= `pwd`
+set RTKLIBPATH  = $HOME/tmp/RTKLIB
+#
+#********************  TUNING VARIABLES BEGIN ********************
+set PROG_VERS 	= (RTKLIB-b34g) # if you have more versions to compile add their names inside round brackets
+set PROGS 	= (rtkrcv str2str rnx2rtkp convbin pos2kml)
+#********************  TUNING VARIABLES END   ********************
+#
+foreach PROG_VER ($PROG_VERS)
+	echo "# $PROG_VER compiling."
+	set SRC_PATH 	= $RTKLIBPATH/${PROG_VER}/app/consapp
+	foreach PROG ($PROGS)
+		cd ${SRC_PATH}/${PROG}/gcc
+		make clean
+		make
+	end
+end

@@ -1,0 +1,161 @@
+#!/bin/tcsh
+#
+# Script to uncompress and convert GNSS raw data file into RINEX files (both observation and navigation RINEX format).
+# created  by DZ (Jan 2019)
+# modified by DZ (May 2019)
+# modified by DZ (Aug 2022)
+#
+#******************** Definition of the main variables ********************
+set path = ($path /usr/sbin /sbin /usr/local/bin /usr/bin /bin /home/${user}/bin .) #fundamental to run  scripts inside cron without full path commands
+#
+# MAIN JOB VALUES
+set StarTime	= `date +%s`
+set JOB		= `basename $0`
+#
+#********************  TUNING VARIABLES BEGIN ********************
+set STORAGE             = /mnt/hd
+set DUMPDIR             = ${STORAGE}/gnss
+set BINDIR              = /home/lzer0/bin
+set LOCSTORAGE          = ${HOME}/tmp/tmp.lzer0
+#
+# DEFAULT PARAMS
+set SITE  	= "UNKN" # Rover site name
+set YEAR  	= `date +%Y`
+set DOY   	= `date +%j`
+set HOUR  	= `date +%H`
+set SES   	= `echo $HOUR | hr2ses`
+set FORCE 	= "N"
+set PRESERVE	= "N"
+set RATE  = 30 #sampling rate
+#
+#********************  TUNING VARIABLES END  ********************
+#
+# check command line params. First one is used to set the site name, second one for brand
+while($#)
+        switch($1)
+                case "-s":
+                        # site name
+                        shift
+                        set SITE = `echo $1 | tr 'a-z' 'A-Z'`
+                        breaksw
+                case "-y":
+                        # Year
+                        shift
+                        set YEAR = $1
+                        breaksw
+                case "-sr":
+                        # Sampling rate
+                        shift
+                        set RATE = $1
+                        breaksw
+                case "-d":
+                        # DOY
+                        shift
+                        set DOY = $1
+                        breaksw
+		case "-h":
+                        # HOUR OF DAY
+                        shift
+                        set HOUR = $1
+                        breaksw
+                case "-w":
+                        #  overwrite old file
+                        set FORCE  = "Y"
+                        breaksw
+                case "-p":
+                        #  preserve old tmp files
+                        set PRESERVE  = "Y"
+                        breaksw
+                default:
+                        shift
+                        breaksw
+        endsw
+        shift
+end
+set COPTS	= "-os -oi -ot -ol -f 1 -ti $RATE" # convbin default options + interval defined by -ti in s
+set site	= `echo $SITE | tr 'A-Z' 'a-z'`
+set SES		= `echo $HOUR | hr2ses`
+set ses		= `echo $SES | tr 'A-Z' 'a-z'`
+set HOURONDISK	= `echo "$HOUR" | awk ' {if (length($0) <=1) print 0$0; else print $0}'`
+set DOYONDISK	= `echo $DOY | awk '{if (length($0) == 1) print "00"$0} {if (length($0) == 2) print "0"$0} {if (length($0) == 3) print $0}'`
+set YR		= `echo $YEAR | awk '{print substr($0,3,2)}'`
+#
+# Building full date
+@ tempDOY = $DOY - 1
+set FULLDATE = `date -d "$tempDOY days ${YEAR}-01-01" +"%Y.%m.%d"`
+#
+# Check local storage file system
+#set targetDir = ${LOCSTORAGE}/${SITE}/${YEAR}/${DOYONDISK}/${HOURONDISK}
+set targetDir = ${LOCSTORAGE}
+if ( ! -e ${targetDir} || (${FORCE} == "Y")) then
+	mkdir -p ${targetDir}
+else
+endif
+echo "Destination dir: ${targetDir}"
+#
+# Cleaning old files
+if ("$PRESERVE" == "N") then
+	rm -fR ${LOCSTORAGE}/* >& /dev/null
+else
+endif
+#
+# source and target filename  Syntax
+# source should be such bru2.2018.343.j.tar.gz
+# target should be such bru2342a.18o, bru2342a.18n, ...
+set sourceDir	= ${DUMPDIR}/${YEAR}/${DOYONDISK}/$ses
+set sourceFile	= ${SITE}${ses}${YR}.${DOYONDISK}.bz2
+set srcRaw	= ${SITE}${ses}${YR}.${DOYONDISK} # UBLOX binary file postfix	(e.g. BRU2l18.342)
+set tgtObs	= ${DOYONDISK}${ses}.${YR}o # RINEX observations	(e.g. 342a.18o)
+set tgtNav      = ${DOYONDISK}${ses}.${YR}n # GPS RINEX NAV		(e.g. 342a.18n)
+set tgtGlo      = ${DOYONDISK}${ses}.${YR}g # GLONASS RINEX NAV		(e.g. 342a.18g)
+set tgtHna      = ${DOYONDISK}${ses}.${YR}h # HNAV			(e.g. 342a.18h)
+set tgtQna      = ${DOYONDISK}${ses}.${YR}q # QNAV			(e.g. 342a.18q)
+set tgtLna      = ${DOYONDISK}${ses}.${YR}l # LNAV			(e.g. 342a.18l)
+set tgtSbs	= ${DOYONDISK}${ses}.${YR}s # SBAS messages		(e.g. 342a.18s)
+#
+# Check il data file is already there
+if ( ! -e ${targetDir}/${site}${tgtObs}) then
+	echo "Copying ${SITE} into tmp dir ${targetDir}"
+	cp ${sourceDir}/${sourceFile} ${targetDir}
+	cd ${targetDir}
+	echo "Extracting ${SITE} raw data from compressed file ${sourceFile}"
+	bunzip2  ${sourceFile}
+	set srcRawType = `lzer0.check.fileformat -f ${srcRaw}`
+	echo "Verifying ${SITE} raw data format"
+	if ($srcRawType == "") then
+		echo "Unknown format for ${SITE}...Exiting."
+		exit
+	else
+		convbin -r ${srcRawType} ${srcRaw} ${COPTS} \
+                	-o ${site}${tgtObs} \
+                	-n ${site}${tgtNav} \
+                	-g ${site}${tgtGlo} \
+                	-h ${site}${tgtHna} \
+                	-q ${site}${tgtQna} \
+                	-l ${site}${tgtLna} \
+                	-s ${site}${tgtSbs}
+	endif
+else
+	if (${FORCE} == "Y") then
+		echo "Entering ${SITE}..."
+	        cp ${sourceDir}/${sourceFile} ${targetDir}
+		cd ${targetDir}
+		bunzip2  ${sourceFile}
+		set srcRawType = `lzer0.check.fileformat -f ${srcRaw}`
+		if ($srcRawType=="") then
+                	echo "Unknown format for ${SITE}...Exiting."
+                	exit
+        	else
+			convbin -r ${srcRawType} ${srcRaw} ${COPTS} \
+				-o ${site}${tgtObs} \
+				-n ${site}${tgtNav} \
+				-g ${site}${tgtGlo} \
+				-h ${site}${tgtHna} \
+				-q ${site}${tgtQna} \
+				-l ${site}${tgtLna} \
+				-s ${site}${tgtSbs}
+		endif
+	else
+		echo "File already present. Use -f option to update it."
+	endif
+endif

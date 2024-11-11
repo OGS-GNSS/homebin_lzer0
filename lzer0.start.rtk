@@ -1,0 +1,51 @@
+#!/bin/tcsh -f
+# created  by DZ (Feb 2017)
+# modified by DZ (Aug 2022) 
+# manual starts rtkrcv to avoid the segmentation faul issue of rtklib 2.4.3 b26
+#
+#********************  DEFAULTS ********************
+set JOB         		= `basename $0`
+set CURDIR      		= `pwd`
+set RUNNINGSCRIPT 		= rtkrcv
+set KEYWORD1 			= 2950
+set KEYWORD2 			= rtkrcv.curr.conf
+set RUNNINGSCRIPT_STATUS        = `ps -ef | grep $RUNNINGSCRIPT | grep $KEYWORD1 |  grep $KEYWORD1 | grep -v $JOB | grep -v grep | wc -l`
+set RUNNINGSCRIPT_PID           = `ps -ef | grep $RUNNINGSCRIPT | grep $KEYWORD1 |  grep $KEYWORD1 | grep -v $JOB | grep -v grep | gawk '{print $2}'`
+#
+# If no arguments are passed it outputs script usage
+if (${%argv} == 0) then
+        echo "- USAGE: $JOB -f [config file]"
+        echo "    e.g: $JOB -f $HOME/cfg/rtkrcv.curr.conf"
+        exit 1
+endif
+#
+# check command line params.
+while($#)
+        switch($1)
+                case "-f":
+                        shift
+                        set cfgFile	= $1
+                        breaksw
+                default:
+                        breaksw
+        endsw
+        shift
+end
+†#
+# CHECK if another rtkrcv is running with the same telnet port and configuration
+if ( $RUNNINGSCRIPT_STATUS) then
+        echo $RUNNINGSCRIPT is runnning with PID $RUNNINGSCRIPT_PID. Stop it before restarting!
+else
+        echo $RUNNINGSCRIPT is stopped... Restarting now!
+	#nohup /usr/local/bin/rtkrcv -p 2950 -o $cfgFile -s & # autostart doesn't work
+	#nohup /usr/local/bin/rtkrcv -p 2950 -o $cfgFile& # most simple
+	cd $HOME/log # needed if you want to log the trace file enabled with the -t option
+	#nohup /usr/local/bin/rtkrcv -p 2950 -o $cfgFile -t 3& # for debugging it creates a trace file
+	nohup /usr/local/bin/rtkrcv -p 2950 -o $cfgFile & # for debugging it creates a trace file
+
+	sleep 3
+	## manual start
+	(echo admin; sleep 1; \
+       		echo "start\r\n"; sleep 1; \
+       		echo "exit\r\n"; sleep 1) | telnet localhost 2950
+endif
