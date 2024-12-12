@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Configurazione
+SCRIPT_PATH="/home/lzer0/bin/lzer0.start.4GNet"
+CHECK_INTERVAL=60 # Controlla la connessione ogni 60 secondi
+
+# Funzione per controllare la connessione a Internet
+check_internet_connection() {
+    if ! ping -c 1 8.8.8.8 &> /dev/null; then
+        echo "Connessione a Internet persa. Avvio dello script $SCRIPT_PATH"
+        "$SCRIPT_PATH"
+    fi
+}
+
+# Ciclo principale del servizio
+while true; do
+    check_internet_connection
+    sleep $CHECK_INTERVAL
+done
