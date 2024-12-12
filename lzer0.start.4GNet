@@ -1,0 +1,98 @@
+#!/bin/bash
+# Creato da Simone Galvi (Giugno 2024)
+# Leggi il contenuto del file provider.config
+provider=$(</home/lzer0/var/provider.config)
+
+tim_start() {
+    echo "tim configuration starting..."
+    sudo systemctl unmask ModemManager.service
+    sudo systemctl disable ModemManager.service
+    sudo systemctl stop ModemManager.service
+    sudo ip link set wwan0 down
+    echo 'Y' | sudo tee /sys/class/net/wwan0/qmi/raw_ip
+    sudo ip link set wwan0 up
+    sudo qmicli -p -d /dev/cdc-wdm0 --device-open-net='net-raw-ip|net-no-qos-header' --wds-start-network="apn='ibox.tim.it',ip-type=4" --client-no-release-cid
+    
+    sudo ip link set wwan0 down
+    sudo ip link set wwan0 up
+    sudo qmicli -p -d /dev/cdc-wdm0 --device-open-net='net-raw-ip|net-no-qos-header' --wds-start-network="apn='ibox.tim.it',ip-type=4" --client-no-release-cid
+    sudo nohup udhcpc -i wwan0 &
+    sleep 10
+}
+
+vodafone_start() {
+    echo "vodafone configuration starting..."
+    sleep 30
+    sudo systemctl kill ModemManager.service
+    sudo ip link set wwan0 down
+    echo 'Y' | sudo tee /sys/class/net/wwan0/qmi/raw_ip
+    sudo ip link set wwan0 up
+    sudo qmicli -p -d /dev/cdc-wdm0 --device-open-net='net-raw-ip|net-no-qos-header' --wds-start-network="apn='web.omnitel.it',ip-type=4" --client-no-release-cid
+    sudo ip link set wwan0 down
+    sudo ip link set wwan0 up
+    sudo qmicli -p -d /dev/cdc-wdm0 --device-open-net='net-raw-ip|net-no-qos-header' --wds-start-network="apn='web.omnitel.it',ip-type=4" --client-no-release-cid
+    sudo nohup udhcpc -i wwan0 &
+    sleep 10
+}
+
+check_connection() {
+    ping -c 1 8.8.8.8 &> /dev/null
+    if [ $? -eq 0 ]; then
+        echo "Connessione attiva"
+        return 0
+        else
+        echo "Connessione non attiva"
+        return 1
+    fi
+}
+
+
+start_provider() {
+    local provider="$1"
+    if [[ $provider == "tim" ]]; then
+        tim_start
+    elif [[ $provider == "vodafone" ]]; then
+        vodafone_start
+    fi
+}
+
+# Siamo su un dispositivo con modem 4G?
+if [ ! -c "/dev/cdc-wdm0" ]; then
+    echo "$(basename "$0") esce: modem 4G assente"
+    exit 0
+fi
+
+if [ ! -d "/home/lzer0/var/" ]; then
+    mkdir -p /home/lzer0/var/
+    echo "Cartella /home/lzer0/var/ creata."
+fi
+if [ ! -f "/home/lzer0/var/provider.config" ]; then
+    touch /home/lzer0/var/provider.config
+    echo "File /home/lzer0/var/provider.config creato."
+fi
+
+while true; do
+    if [[ $provider == "tim" ]]; then
+        start_provider "tim"
+    elif [[ $provider == "vodafone" ]]; then
+        start_provider "vodafone"
+    else
+        echo "Provo con configurazione vodafone"
+        provider="vodafone"
+        start_provider "$provider"
+    fi
+    
+    echo "Tentativo di connessione..."
+    if check_connection; then
+        echo "Connessione stabilita"
+        echo "$provider" > /home/lzer0/var/provider.config
+        break
+    else
+        echo "Connessione fallita, provando l'altra configurazione..."
+        if [[ $provider == "tim" ]]; then
+            provider="vodafone"
+        else
+            provider="tim"
+        fi
+    fi
+done

@@ -31,14 +31,18 @@ while($#)
         endsw
         shift
 end
-#
+†#
 # CHECK if another rtkrcv is running with the same telnet port and configuration
 if ( $RUNNINGSCRIPT_STATUS) then
         echo $RUNNINGSCRIPT is runnning with PID $RUNNINGSCRIPT_PID. Stop it before restarting!
 else
         echo $RUNNINGSCRIPT is stopped... Restarting now!
-	#nohup /usr/local/bin/rtkrcv -p 2950 -o $cfgFile -s &
-	nohup /usr/local/bin/rtkrcv -p 2950 -o $cfgFile &
+	#nohup /usr/local/bin/rtkrcv -p 2950 -o $cfgFile -s & # autostart doesn't work
+	#nohup /usr/local/bin/rtkrcv -p 2950 -o $cfgFile& # most simple
+	cd $HOME/log # needed if you want to log the trace file enabled with the -t option
+	#nohup /usr/local/bin/rtkrcv -p 2950 -o $cfgFile -t 3& # for debugging it creates a trace file
+	nohup /usr/local/bin/rtkrcv -p 2950 -o $cfgFile & # for debugging it creates a trace file
+
 	sleep 3
 	## manual start
 	(echo admin; sleep 1; \

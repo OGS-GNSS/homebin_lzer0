@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# Funzione per controllare la connessione a Internet
+check_connection() {
+    # Ping al DNS di Google
+    if ping -c 1 8.8.8.8 &> /dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+log_error() {
+    local msg="$1"
+    local log_file="/home/lzer0/simodir/log/$(date +%Y-%m-%d).log"
+    echo "$(date +'%Y-%m-%d %H:%M:%S') - ERROR - $msg" >> "$log_file"
+}
+
+# Variabile per tracciare il tempo senza connessione
+no_connection_time=0
+
+# Intervallo di controllo (in secondi)
+interval=60
+
+# Siamo su un dispositivo con modem 4G?
+if [ ! -c "/dev/cdc-wdm0" ]; then
+    echo "$(basename "$0") esce: modem 4G assente"
+    exit 0
+fi
+
+# Loop infinito
+while true; do
+    if check_connection; then
+        echo "Connessione attiva"
+        no_connection_time=0
+    else
+        echo "Connessione assente"
+        no_connection_time=$((no_connection_time + interval))
+        if [ $no_connection_time -ge 300 ]; then
+            log_error "Connessione assente da piu di 5 minuti, eseguo lo script provider.startup.sh"
+            /home/lzer0/bin/lzer0.provider.4g.setup
+            
+            # Aspetta 5 minuti e controlla di nuovo la connessione
+            sleep 300
+            if ! check_connection; then
+                log_error "Connessione ancora assente dopo aver eseguito lo script, riavvio la macchina"
+                sudo reboot
+            else
+                log_error "Connessione ripristinata dopo aver eseguito lo script"
+                no_connection_time=0
+            fi
+        fi
+    fi
+
+    # Aspetta l'intervallo specificato prima del prossimo controllo
+    sleep $interval
+done
