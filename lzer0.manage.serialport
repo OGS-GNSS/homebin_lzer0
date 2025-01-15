@@ -72,9 +72,9 @@ switch($1)
                         if (("$sta1" == "0") && ("$sta2" == "1")) then
                                 echo "[`date "+%H:%M"`] Status: $KEYWORDS[2]" >> $LOG_FILE && tail -n 1 $LOG_FILE
                         else
-				echo "[`date "+%H:%M"`] Status: UNKN, launch ser2net" >> $LOG_FILE && tail -n 1 $LOG_FILE
-                                $DEVMANPERFIX.$KEYWORDS[1] stop 
-                                $DEVMANPERFIX.$KEYWORDS[2] start
+				echo "[`date "+%H:%M"`] Status: UNKN, launch str2str" >> $LOG_FILE && tail -n 1 $LOG_FILE
+                                $DEVMANPERFIX.$KEYWORDS[2] stop 
+                                $DEVMANPERFIX.$KEYWORDS[1] start
 
 			endif
 		endif
