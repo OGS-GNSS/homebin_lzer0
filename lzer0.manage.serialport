@@ -8,7 +8,9 @@ set JOB         		= `basename $0`
 set CURDIR      		= `pwd`
 set KEYWORDS			= (ser2net str2str)
 set DEVMANPERFIX 		= lzer0.manage
-#
+set LOG_DIR			= /home/lzer0/log/
+set LOG_FILE = "$LOG_DIR/`date +%d%b%Y`.lzer0.manage.serialport.check.log"
+
 # If no arguments are passed it outputs script usage
 if (${%argv} == 0) then
         echo "- USAGE: $JOB  [service/status]"
@@ -58,6 +60,22 @@ switch($1)
 				echo $KEYWORDS[2]
 			else
 				echo unkn
+			endif
+		endif
+		breaksw
+	case "check":
+		set sta1 = `$DEVMANPERFIX.$KEYWORDS[1] status`
+                set sta2 = `$DEVMANPERFIX.$KEYWORDS[2] status`
+                if (("$sta1" == "1") && ("$sta2" == "0")) then
+                        echo "[`date "+%H:%M"`] Status: $KEYWORDS[1]" >> $LOG_FILE && tail -n 1 $LOG_FILE
+                else
+                        if (("$sta1" == "0") && ("$sta2" == "1")) then
+                                echo "[`date "+%H:%M"`] Status: $KEYWORDS[2]" >> $LOG_FILE && tail -n 1 $LOG_FILE
+                        else
+				echo "[`date "+%H:%M"`] Status: UNKN, launch ser2net" >> $LOG_FILE && tail -n 1 $LOG_FILE
+                                $DEVMANPERFIX.$KEYWORDS[1] stop 
+                                $DEVMANPERFIX.$KEYWORDS[2] start
+
 			endif
 		endif
 		breaksw
