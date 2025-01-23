@@ -1,0 +1,2 @@
+#!/bin/bash
+python /usr/local/bin/pijuice_util.py --load < /home/lzer0/cfg/pijuice/pijuice_dump.json
