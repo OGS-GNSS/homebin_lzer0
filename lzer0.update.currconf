@@ -1,0 +1,157 @@
+#!/usr/bin/python3
+import os
+import shutil
+import subprocess
+import signal
+
+def parse_sites_cfg(file_path):
+    variables = {}
+    
+    with open(file_path, "r") as file:
+        for line in file:
+            if ":" in line:
+                key, value = line.split(":", 1)
+                key = key.strip().lower().replace(" ", "_")
+                value = value.strip()
+                
+                if "coordinates" in key:
+                    value = list(map(float, value.split(",")))
+                
+                variables[key] = value
+    
+    return variables
+def update_rtkrcv_config(file_path, data):
+    # Crea una copia di backup con la data del giorno
+    backup_path = f"{file_path}.bak"
+    
+    # Copia il file originale
+    shutil.copy2(file_path, backup_path)
+    print(f"Creato backup in: {backup_path}")
+
+    # Genera i nuovi valori basati sui dati letti da sites.cfg
+    rover_name = data["rover_name"]
+    master_name = data["master_name"]
+    master_coordinates = data.get("master_coordinates", [None, None, None])
+    mcaster_ip = data["mcaster_ip"]
+    mcaster_port = data["mcaster_port"]
+    mcaster_mountpoint = data["mcaster_mountpoint"]
+    mcaster_user = data["mcaster_user"]
+    mcaster_password = data["mcaster_password"]
+    mcaster_stream = data["mcaster_stream"]
+    pcaster_ip = data["pcaster_ip"]
+    pcaster_port = data["pcaster_port"]
+    pcaster_mountpoint = data["pcaster_mountpoint"]
+    pcaster_user = data["pcaster_user"]
+    pcaster_password = data["pcaster_password"]
+    pcaster_stream = data["pcaster_stream"]
+
+    new_values = {
+        "logstr1-path": f"/mnt/hd/gnss/%Y/%n/%H/U{rover_name}%H%y.%n::S=1::T",
+        "logstr2-path": f"/mnt/hd/gnss/%Y/%n/%H/R{master_name}%H%y.%n::S=1::T",
+        "ant2-pos1": f"{master_coordinates[0]}           # (deg|m) {master_name} LAT",
+        "ant2-pos2": f"{master_coordinates[1]}           # (deg|m) {master_name} LON",
+        "ant2-pos3": f"{master_coordinates[2]}               # (m|m) {master_name} H",
+        "inpstr2-path": f"{mcaster_user}:{mcaster_password}@{mcaster_ip}:{mcaster_port}/{mcaster_mountpoint}",
+        "inpstr2-format": f"{mcaster_stream}      # (0:rtcm2,1:rtcm3,2:oem4,3:oem3,4:ubx,5:ss2,6:hemis,7:skytraq,8:gw10,9:javad,10:nvs,11:binex,12:rt17,15:sp3)",
+        "inpstr3-path": f"{pcaster_user}:{pcaster_password}@{pcaster_ip}:{pcaster_port}/{pcaster_mountpoint}",
+        "inpstr3-format": f"{pcaster_stream}      # (0:rtcm2,1:rtcm3,2:oem4,3:oem3,4:ubx,5:ss2,6:hemis,7:skytraq,8:gw10,9:javad,10:nvs,11:binex,12:rt17,15:sp3)"
+    }
+
+    # Leggi il file di configurazione esistente
+    updated_lines = []
+    with open(file_path, "r") as file:
+        for line in file:
+            key = line.split("=")[0].strip()  # Estrai la chiave dalla riga
+            if key in new_values:
+                # Sostituisci la riga con il nuovo valore
+                updated_lines.append(f"{key}={new_values[key]}\n")
+                print(f"sostituita riga {key}={new_values[key]}")
+            else:
+                # Mantieni la riga originale
+                updated_lines.append(line)
+
+    # Scrivi le righe aggiornate nel file
+    with open(file_path, "w") as file:
+        file.writelines(updated_lines)
+
+def restart_services():
+    try:
+        # Esegui il primo comando
+        tcp2file_command = "/home/lzer0/bin/lzer0.tcp2file.ubx -f /home/lzer0/cfg/sites.cfg >> /home/lzer0/log/lzer0.tcp2file.ubx.log 2>&1"
+        print("Avvio del comando tcp2file...")
+        subprocess.run(tcp2file_command, shell=True, check=True)
+        print("Comando tcp2file completato con successo.")
+
+        # Esegui il secondo comando
+        
+	# *** al momento tengo commentato questo comando. fa perdere un sacco di tempo all'operazione di riavvio dei servizi quindi se non e' necessario non lo eseguirei ***
+
+        #compress_command = "/home/lzer0/bin/lzer0.compress.hourlygnssall -f /home/lzer0/cfg/sites.cfg -p 96 >> /home/lzer0/log/lzer0.compress.hourlygnss.log 2>&1"
+        #print("Avvio del comando compress...")
+        #subprocess.run(compress_command, shell=True, check=True)
+        #print("Comando compress completato con successo.")        
+	
+        # Cerca e uccidi il processo contenente le keyword "rtkrcv" e "2950"
+        kill_process_command = "ps -ef | grep 'rtkrcv' | grep '2950' | gawk '{print $2}'"
+        rtk_process_ids = subprocess.check_output(kill_process_command, shell=True, text=True).strip().split("\n")
+
+        for pid in rtk_process_ids:
+            pid = pid.strip()
+            if pid.isdigit():
+                try:
+                    print(f"Uccisione del processo con PID {pid}")
+                    os.kill(int(pid), signal.SIGKILL)
+                    print(f"Processo con pid {pid} ucciso")
+                except ProcessLookupError:
+                    print(f"Il processo con PID {pid} non esiste più.")
+            else:
+                print(f"PID non valido: '{pid}'")
+        # Avvia il nuovo processo
+        start_rtk_command = "/home/lzer0/bin/lzer0.start.rtk -f /home/lzer0/cfg/rtkrcv.curr.conf >> /home/lzer0/log/lzer0.start.rtk.log 2>&1"
+        print(f"Esecuzione del comando: {start_rtk_command}")
+        subprocess.run(start_rtk_command, shell=True, check=True)
+
+        # Cerca e uccidi il processo contenente le keyword "str2str" e "5754"
+        kill_process_command = "ps -ef | grep 'str2str' | grep '5754' | gawk '{print $2}'"
+        str2str_process_ids = subprocess.check_output(kill_process_command, shell=True, text=True).strip().split("\n")
+	
+        for pid in str2str_process_ids:
+            pid = pid.strip()
+            if pid.isdigit():
+                try:
+                    print(f"Uccisione del processo con PID {pid}")
+                    os.kill(int(pid), signal.SIGKILL)
+                    print(f"Processo con pid {pid} ucciso")
+                except ProcessLookupError:
+                    print(f"Il processo con PID {pid} non esiste piu.")
+            else:
+                print(f"PID non valido: '{pid}'")
+        # Avvia il nuovo processo
+        start_str2str_command = "/home/lzer0/bin/lzer0.record.hourlypos -f /home/lzer0/cfg/sites.cfg >> /home/lzer0/log/lzer0.record.hourlypos.log 2>&1"
+        print(f"Esecuzione del comando: {start_rtk_command}")
+        subprocess.run(start_str2str_command, shell=True, check=True)
+	
+        print("Tutti i servizi sono stati riavviati")
+    except Exception as e:
+        print(f"Errore durante l'esecuzione dei comandi post-update: {e}")
+
+
+
+# Esempio di utilizzo
+sites_cfg_file = "/home/lzer0/cfg/sites.cfg"
+rtkrcv_conf_file = "/home/lzer0/cfg/rtkrcv.curr.conf"
+
+# Verifica l'esistenza dei file
+if not os.path.exists(sites_cfg_file):
+    raise FileNotFoundError(f"Il file {sites_cfg_file} non esiste")
+if not os.path.exists(rtkrcv_conf_file):
+    raise FileNotFoundError(f"Il file {rtkrcv_conf_file} non esiste")
+
+# Leggi i dati da sites.cfg
+data = parse_sites_cfg(sites_cfg_file)
+
+# Aggiorna rtkrcv.curr.conf con i nuovi valori
+update_rtkrcv_config(rtkrcv_conf_file, data)
+
+# Esegui i comandi post-update
+restart_services()
