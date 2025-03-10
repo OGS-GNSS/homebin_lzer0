@@ -9,6 +9,17 @@ set STORAGE     = ${EXTDISK}/gnss
 #
 #mount ${EXTDISK} >& /dev/null
 mount ${EXTDISK}
+
+# Ottieni le opzioni di montaggio con findmnt
+set mount_options = `findmnt -no OPTIONS ${EXTDISK}`
+# Estrai il primo token separato da virgola
+set first_option = `echo $mount_options | cut -d, -f1`
+
+if ("$first_option" != "rw") then
+    echo "Il disco non è montato in lettura/scrittura, procedo con il remount..."
+    mount -o remount,rw ${EXTDISK}
+endif
+
 if (! -e ${STORAGE}) then
         mkdir -p ${STORAGE}
 endif
