@@ -2,12 +2,23 @@
 # Created by DZ (Nov 2018)
 # modified by DZ (Nov 2018)
 # modified by DZ (Aug 2021)
-#
+# modified by sg (mar 25) - Added internal logging
+
 #********************  DEFAULTS ********************
 set JOB		= `basename $0`
 set CURDIR	= `pwd`
-set CURDATE	= `date` # added by DZ Aug 2021
-#
+set CURDATE	= `date`
+set LOGDIR	= /home/lzer0/log
+set LOGFILE	= ${LOGDIR}/`basename $0`.log
+
+# Create log directory if it doesn't exist
+if (! -d ${LOGDIR}) then
+    mkdir -p ${LOGDIR}
+endif
+
+# Redirect all output to log file
+exec >>& ${LOGFILE}
+
 #********************  TUNING VARIABLES BEGIN ********************
 #set DUMPDIR		= /${HOME}/raw
 set STORAGE		= /mnt/hd

@@ -2,12 +2,28 @@
 #
 # Script to compress both MASTER and ROVER hourly GNSS data
 # created by DZ (Aug 2022)
+# modified by sg (mar 25) - Added internal logging
 #
 #********************  DEFAULTS ********************
 set JOB		= `basename $0`
 set CURDIR	= `pwd`
-set path = ($path /usr/sbin /sbin /usr/local/bin /usr/bin /bin /home/${user}/bin .) #fundamental to run  scripts inside cron without full path commands
-#
+set path = ($path /usr/sbin /sbin /usr/local/bin /usr/bin /bin /home/${user}/bin .) 
+
+# Set up logging
+set LOGDIR = /home/${user}/log
+set LOGFILE = ${LOGDIR}/lzer0.compress.hourlygnss.log
+
+# Create log directory if it doesn't exist
+if (! -d ${LOGDIR}) then
+    mkdir -p ${LOGDIR}
+endif
+
+# Redirect all output to log file
+exec >>& ${LOGFILE}
+
+# Add timestamp to log
+echo "=== Script started at `date` ==="
+
 #********************  TUNING VARIABLES BEGIN ********************
 set STORAGE		= /mnt/hd
 set DUMPDIR		= ${STORAGE}/gnss

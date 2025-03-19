@@ -4,12 +4,16 @@
 # made in bash because tsch does not support error redirecting and socat causese a broken pipe at the 1st exit status
 #
 #********************  DEFAULTS ********************
-#
+
+# Create log directory if it doesn't exist
+LOG_DIR=$HOME/log
+[ ! -d "$LOG_DIR" ] && mkdir -p "$LOG_DIR"
+
 #******************** Definition of the main variables ********************
-path=($path /usr/bin /usr/sbin /sbin /usr/local/bin /usr/bin /bin /home/${user}/bin .) #fundamental to run  scripts inside cron without full path commands
+path=($path /usr/bin /usr/sbin /sbin /usr/local/bin /usr/bin /bin /home/${user}/bin .)
 JOB=`basename $0`
 CURDIR=`pwd`
-LOGFILE=$HOME/log/$JOB.internal.log
+LOGFILE=$LOG_DIR/$JOB.internal.log
 #lzer0Date=`(socat tcp:localhost:2222 - | grep --line-buffered -a GNRMC | gawk 'BEGIN{FS="GNRMC"}; {print $2;exit}; fflush()' | gawk 'BEGIN{FS=","} {print "20"substr($10,5,2)"/"substr($10,3,2)"/"substr($10,1,2)}') 2> /dev/null`
 #lzer0Time=`(socat tcp:localhost:2222 - | grep --line-buffered -a GNGGA | gawk 'BEGIN{FS=","}; {print substr($2,1,2)":"substr($2,3,2)":"substr($2,5,5);exit}; fflush()') 2> /dev/null`
 lzer0Date=`socat tcp:localhost:2222 - | grep --line-buffered -a GNRMC | gawk 'BEGIN{FS="GNRMC"}; {print $2;exit}; fflush()' | gawk 'BEGIN{FS=","}; {print "20"substr($10,5,2)"/"substr($10,3,2)"/"substr($10,1,2)}'`
