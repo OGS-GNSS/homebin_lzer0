@@ -18,8 +18,8 @@ if (! -d ${LOGDIR}) then
 endif
 
 # Function to log messages
-alias log 'echo "`date "+%Y-%m-%d %H:%M:%S"` - $JOB - $*" >> ${LOGFILE}'
-
+#alias log 'echo `date "+%Y-%m-%d %H:%M:%S"` - $JOB - $*" >> ${LOGFILE}'
+alias log 'echo `date "+%Y-%m-%d %H:%M:%S"`" - $JOB - \!*" >> ${LOGFILE}'
 log "Script started"
 
 #********************  INPUT SETTINGS MANAGEMENT ***************

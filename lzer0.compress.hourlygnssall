@@ -19,7 +19,7 @@ if (! -d ${LOGDIR}) then
 endif
 
 # Redirect all output to log file
-exec >>& ${LOGFILE}
+echo "=== Script started at `date` ===" >>& ${LOGFILE}
 
 # Add timestamp to log
 echo "=== Script started at `date` ==="

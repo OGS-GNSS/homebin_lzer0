@@ -22,12 +22,6 @@ no_connection_time=0
 # Intervallo di controllo (in secondi)
 interval=60
 
-# Siamo su un dispositivo con modem 4G?
-if [ ! -c "/dev/cdc-wdm0" ]; then
-    echo "$(basename "$0") esce: modem 4G assente"
-    exit 0
-fi
-
 # Loop infinito
 while true; do
     if check_connection; then

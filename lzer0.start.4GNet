@@ -1,119 +1,92 @@
 #!/bin/bash
-# Script di connessione 4G avanzato con gestione errori
 # Creato da Simone Galvi (Giugno 2024)
+# Leggi il contenuto del file provider.config
+provider=$(</home/lzer0/var/provider.config)
 
-set -eo pipefail
-
-# Configurazioni
-MODEM_DEVICE="/dev/cdc-wdm0"
-NET_INTERFACE="wwan0"
-APN_TIM="ibox.tim.it"
-APN_VODAFONE="web.omnitel.it"
-MAX_ATTEMPTS=3
-RETRY_DELAY=15
-
-# Funzione di inizializzazione modem
-init_modem() {
-    echo "Inizializzazione modem..."
+tim_start() {
+    echo "tim configuration starting..."
+    sudo systemctl unmask ModemManager.service
+    sudo systemctl disable ModemManager.service
+    sudo systemctl stop ModemManager.service
+    sudo ip link set wwan0 down
+    echo 'Y' | sudo tee /sys/class/net/wwan0/qmi/raw_ip
+    sudo ip link set wwan0 up
+    sudo qmicli -p -d /dev/cdc-wdm0 --device-open-net='net-raw-ip|net-no-qos-header' --wds-start-network="apn='ibox.tim.it',ip-type=4" --client-no-release-cid
     
-    # Disabilita completamente ModemManager
-    sudo systemctl stop ModemManager 2>/dev/null || true
-    sudo systemctl mask ModemManager 2>/dev/null || true
-    
-    # Configurazione interfaccia di rete
-    sudo ip link set $NET_INTERFACE down
-    echo 'Y' | sudo tee /sys/class/net/$NET_INTERFACE/qmi/raw_ip >/dev/null
-    sudo ip link set $NET_INTERFACE up
-    sleep 2
+    sudo ip link set wwan0 down
+    sudo ip link set wwan0 up
+    sudo qmicli -p -d /dev/cdc-wdm0 --device-open-net='net-raw-ip|net-no-qos-header' --wds-start-network="apn='ibox.tim.it',ip-type=4" --client-no-release-cid
+    sudo nohup udhcpc -i wwan0 &
+    sleep 10
 }
 
-# Funzione di verifica segnale
-check_signal() {
-    echo "Verifica segnale..."
-    local attempt=0
-    while [ $attempt -lt 5 ]; do
-        if sudo qmicli -d $MODEM_DEVICE --nas-get-signal-strength; then
-            return 0
-        fi
-        sleep 5
-        ((attempt++))
-    done
-    echo "Nessun segnale rilevato!"
-    return 1
+vodafone_start() {
+    echo "vodafone configuration starting..."
+    sleep 30
+    sudo systemctl kill ModemManager.service
+    sudo ip link set wwan0 down
+    echo 'Y' | sudo tee /sys/class/net/wwan0/qmi/raw_ip
+    sudo ip link set wwan0 up
+    sudo qmicli -p -d /dev/cdc-wdm0 --device-open-net='net-raw-ip|net-no-qos-header' --wds-start-network="apn='web.omnitel.it',ip-type=4" --client-no-release-cid
+    sudo ip link set wwan0 down
+    sudo ip link set wwan0 up
+    sudo qmicli -p -d /dev/cdc-wdm0 --device-open-net='net-raw-ip|net-no-qos-header' --wds-start-network="apn='web.omnitel.it',ip-type=4" --client-no-release-cid
+    sudo nohup udhcpc -i wwan0 &
+    sleep 10
 }
 
-# Funzione di connessione con ritentivo
-connect_network() {
-    local apn=$1
-    echo "Tentativo connessione APN: $apn"
-    
-    for ((i=1; i<=$MAX_ATTEMPTS; i++)); do
-        echo "Tentativo $i/$MAX_ATTEMPTS"
-        
-        # Avvia la connessione QMI
-        if sudo qmicli -p -d $MODEM_DEVICE \
-            --device-open-net='net-raw-ip|net-no-qos-header' \
-            --wds-start-network="apn='$apn',ip-type=4" \
-            --client-no-release-cid; then
-            return 0
-        fi
-        
-        # Gestione errori specifica
-        case $? in
-            14)  # QMI Protocol Error
-                echo "Errore QMI, reset interfaccia..."
-                sudo ip link set $NET_INTERFACE down
-                sleep 2
-                sudo ip link set $NET_INTERFACE up
-                ;;
-            *)
-                echo "Errore sconosciuto, riprovo..."
-                ;;
-        esac
-        
-        sleep $RETRY_DELAY
-    done
-    return 1
-}
-
-# Main procedure
-main() {
-    # Controllo root
-    [ "$EUID" -eq 0 ] || { 
-        echo "Eseguire come root" >&2
-        exit 1
-    }
-
-    # Controllo presenza modem
-    [ -c $MODEM_DEVICE ] || {
-        echo "Modem non rilevato!"
-        exit 1
-    }
-
-    init_modem
-    check_signal || exit 1
-
-    # Tentativo connessione con fallback
-    if ! connect_network $APN_VODAFONE; then
-        echo "Fallback a TIM..."
-        connect_network $APN_TIM || {
-            echo "Connessione fallita per entrambi i provider"
-            exit 1
-        }
+check_connection() {
+    ping -c 1 8.8.8.8 &> /dev/null
+    if [ $? -eq 0 ]; then
+        echo "Connessione attiva"
+        return 0
+        else
+        echo "Connessione non attiva"
+        return 1
     fi
+}
 
-    # Assegnazione IP
-    echo "Assegnazione IP..."
-    sudo udhcpc -i $NET_INTERFACE -n -q -t 5 -T 3
-    sleep 2
 
-    # Verifica finale
-    if ip -4 addr show dev $NET_INTERFACE | grep -q 'inet'; then
-        echo "Connessione riuscita!"
+start_provider() {
+    local provider="$1"
+    if [[ $provider == "tim" ]]; then
+        tim_start
+    elif [[ $provider == "vodafone" ]]; then
+        vodafone_start
+    fi
+}
+
+if [ ! -d "/home/lzer0/var/" ]; then
+    mkdir -p /home/lzer0/var/
+    echo "Cartella /home/lzer0/var/ creata."
+fi
+if [ ! -f "/home/lzer0/var/provider.config" ]; then
+    touch /home/lzer0/var/provider.config
+    echo "File /home/lzer0/var/provider.config creato."
+fi
+
+while true; do
+    if [[ $provider == "tim" ]]; then
+        start_provider "tim"
+    elif [[ $provider == "vodafone" ]]; then
+        start_provider "vodafone"
     else
-        echo "Connessione attiva ma nessun IP assegnato!"
-        exit 1
+        echo "Provo con configurazione vodafone"
+        provider="vodafone"
+        start_provider "$provider"
     fi
-}
-
-main
+    
+    echo "Tentativo di connessione..."
+    if check_connection; then
+        echo "Connessione stabilita"
+        echo "$provider" > /home/lzer0/var/provider.config
+        break
+    else
+        echo "Connessione fallita, provando l'altra configurazione..."
+        if [[ $provider == "tim" ]]; then
+            provider="vodafone"
+        else
+            provider="tim"
+        fi
+    fi
+done
