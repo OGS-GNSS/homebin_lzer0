@@ -1,6 +1,3 @@
-
----
-
 ## Introduzione
 
 Il progetto **lzer0** è una soluzione integrata per la gestione e l’elaborazione in tempo reale dei dati GNSS. Esso sfrutta una serie di script che vengono eseguiti tramite il crontab per automatizzare attività come:
