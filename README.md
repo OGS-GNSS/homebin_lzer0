@@ -50,6 +50,36 @@ Il crontab dell’utente **lzer0** contiene le seguenti configurazioni:
 
 ```bash
 #
+# Each task to run has to be defined through a single line
+# indicating with different fields when the task will be run
+# and what command to run for the task
+#
+# To define the time you can provide concrete values for
+# minute (m), hour (h), day of month (dom), month (mon),
+# and day of week (dow) or use '*' in these fields (for 'any').
+#
+# Notice that tasks will be started based on the cron's system
+# daemon's notion of time and timezones.
+#
+# Output of the crontab jobs (including errors) is sent through
+# email to the user the crontab file belongs to (unless redirected).
+#
+#  _                     _____ 
+# | |                   / __  \
+# | |    ____  ___ _ __| | / / |
+# | |   |_  / / _ \ '__| |/ /| |
+# | |___ / / |  __/ |  | ' /_| |
+# |_____/___| \___|_|   \_____/
+#
+# * * * * *
+# - - - - -
+# | | | | |
+# | | | | +----- day of week (0-6) (Sunday=0)
+# | | | +------- month (1 - 12)
+# | | +-------- day of month (1 - 31)
+# | +--------- hour (0 - 23)
+# +---------- min (0 - 59)
+#
 # Impostazioni generali per il PATH
 PATH=/home/lzer0/bin:/usr/local/bin:/usr/bin:/bin
 
@@ -97,6 +127,37 @@ PATH=/home/lzer0/bin:/usr/local/bin:/usr/bin:/bin
 Il crontab di **root** è configurato per garantire la connettività e il monitoraggio della rete:
 
 ```bash
+#
+# Each task to run has to be defined through a single line
+# indicating with different fields when the task will be run
+# and what command to run for the task
+#
+# To define the time you can provide concrete values for
+# minute (m), hour (h), day of month (dom), month (mon),
+# and day of week (dow) or use '*' in these fields (for 'any').
+#
+# Notice that tasks will be started based on the cron's system
+# daemon's notion of time and timezones.
+#
+# Output of the crontab jobs (including errors) is sent through
+# email to the user the crontab file belongs to (unless redirected).
+#
+#  _                     _____ 
+# | |                   / __  \
+# | |    ____  ___ _ __| | / / |
+# | |   |_  / / _ \ '__| |/ /| |
+# | |___ / / |  __/ |  | ' /_| |
+# |_____/___| \___|_|   \_____/
+#
+# * * * * *
+# - - - - -
+# | | | | |
+# | | | | +----- day of week (0-6) (Sunday=0)
+# | | | +------- month (1 - 12)
+# | | +-------- day of month (1 - 31)
+# | +--------- hour (0 - 23)
+# +---------- min (0 - 59)
+#
 @reboot /home/lzer0/bin/lzer0.start.4GNet >/dev/null 2>&1
 @reboot /home/lzer0/bin/network.watchdog >/dev/null 2>&1
 ```
