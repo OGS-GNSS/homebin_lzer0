@@ -160,6 +160,8 @@ Il crontab di **root** è configurato per garantire la connettività e il monito
 #
 @reboot /home/lzer0/bin/lzer0.start.4GNet >/dev/null 2>&1
 @reboot /home/lzer0/bin/network.watchdog >/dev/null 2>&1
+*/2 * * * * /home/lzer0/bin/lzer0.set.datetime > /home/lzer0/log/lzer0.set.datetime.log 2>&1
+
 ```
 
 ---
