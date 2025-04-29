@@ -1,8 +1,11 @@
 #!/bin/tcsh 
 # created  by DZ (Mar 2017)
-# modifide by DZ (Aug 2022)
+# modified by DZ (Aug 2022)
 # modified by sg (mar 25) - Added internal logging
-set JOB 			= `basename $0`
+# modified - Improved logging system
+
+# Define script name
+set JOB = `basename $0`
 
 # Define log directory and file
 set LOG_DIR = "$HOME/log"
@@ -13,41 +16,77 @@ if (! -d "$LOG_DIR") then
     mkdir -p "$LOG_DIR"
 endif
 
-# Redirect all output to the log file (append mode)
-exec >> "$LOG_FILE" 2>&1
+# Function to log messages
+alias log_message 'echo `date "+%Y-%m-%d %H:%M:%S"` - \!* >> $LOG_FILE'
 
-# If no arguments are passed it outputs script usage
+# If no arguments are passed it outputs script usage and logs it
 if (${%argv} == 0) then
-        echo "- USAGE: $JOB -f [config file]"
-        echo "    e.g: $JOB -f $HOME/cfg/rtkrcv.curr.conf"
-        exit 1
+    log_message "No arguments provided. Showing usage."
+    echo "- USAGE: $JOB -f [config file]"
+    echo "    e.g: $JOB -f $HOME/cfg/rtkrcv.curr.conf"
+    exit 1
 endif
 
-# check command line params.
-while($#)
-        switch($1)
-                case "-f":
-                        shift
-                        set cfgFile     = $1
-                        breaksw
-                default:
-                        breaksw
-        endsw
-        shift
+# Process command line params
+set cfgFile = ""
+while ($#)
+    switch($1)
+        case "-f":
+            shift
+            if ($# > 0) then
+                set cfgFile = $1
+            else
+                log_message "ERROR: No value provided for -f option"
+                echo "ERROR: No value provided for -f option"
+                exit 1
+            endif
+            breaksw
+        default:
+            breaksw
+    endsw
+    shift
 end
-set RUNNINGSCRIPT 		= rtkrcv
-set KEYWORD1 			= 2950
-set KEYWORD2 			= $cfgFile
-set RUNNINGSCRIPT_STATUS 	= `ps -ef | grep $RUNNINGSCRIPT | grep $KEYWORD1 |  grep $KEYWORD1 | grep -v $JOB | grep -v grep | wc -l`
-set RUNNINGSCRIPT_PID    	= `ps -ef | grep $RUNNINGSCRIPT | grep $KEYWORD1 |  grep $KEYWORD1 | grep -v $JOB | grep -v grep | gawk '{print $2}'`
 
-# Add timestamp to log entries
-echo "`date '+%Y-%m-%d %H:%M:%S'` - Checking $RUNNINGSCRIPT status"
-
-# CHECK.
-if ( $RUNNINGSCRIPT_STATUS) then
-        echo "$RUNNINGSCRIPT is runnning with PID $RUNNINGSCRIPT_PID"
-else
-	echo "$RUNNINGSCRIPT not running. Starting now!"
-        $HOME/bin/lzer0.start.rtk -f $cfgFile
+# Check if config file was provided
+if ("$cfgFile" == "") then
+    log_message "ERROR: Config file not specified"
+    echo "ERROR: Config file not specified"
+    echo "- USAGE: $JOB -f [config file]"
+    exit 1
 endif
+
+# Log start of checking process
+log_message "Starting check for rtkrcv service"
+
+# Define process variables
+set RUNNINGSCRIPT = rtkrcv
+set KEYWORD1 = 2950
+set KEYWORD2 = $cfgFile
+
+# Check if process is running
+set RUNNINGSCRIPT_STATUS = `ps -ef | grep $RUNNINGSCRIPT | grep $KEYWORD1 | grep -v $JOB | grep -v grep | wc -l`
+set RUNNINGSCRIPT_PID = `ps -ef | grep $RUNNINGSCRIPT | grep $KEYWORD1 | grep -v $JOB | grep -v grep | awk '{print $2}'`
+
+# Check status and log result
+if ($RUNNINGSCRIPT_STATUS) then
+    log_message "$RUNNINGSCRIPT is running with PID $RUNNINGSCRIPT_PID"
+    echo "$RUNNINGSCRIPT is running with PID $RUNNINGSCRIPT_PID"
+else
+    log_message "$RUNNINGSCRIPT not running. Starting now!"
+    echo "$RUNNINGSCRIPT not running. Starting now!"
+    
+    # Try to start the service and log the result
+    log_message "Executing: $HOME/bin/lzer0.start.rtk -f $cfgFile"
+    $HOME/bin/lzer0.start.rtk -f $cfgFile
+    
+    # Check if start was successful
+    set START_STATUS = $status
+    if ($START_STATUS == 0) then
+        log_message "Successfully started $RUNNINGSCRIPT"
+    else
+        log_message "Failed to start $RUNNINGSCRIPT, exit code: $START_STATUS"
+    endif
+endif
+
+# Log completion
+log_message "Check completed"

@@ -12,7 +12,7 @@ check_connection() {
 
 log_error() {
     local msg="$1"
-    local log_file="/home/lzer0/simodir/log/$(date +%Y-%m-%d).log"
+    local log_file="/home/lzer0/log/$(date +%Y-%m-%d).log"
     echo "$(date +'%Y-%m-%d %H:%M:%S') - ERROR - $msg" >> "$log_file"
 }
 

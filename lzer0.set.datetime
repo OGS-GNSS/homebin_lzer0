@@ -1,14 +1,83 @@
-#!/bin/tcsh
-# Written by David Zuliani (Apr 2017)
-#
-# DEFAULTS
-set ntpServer = ntp1.inrim.it
-#
-# Shutdwon ntpd
-sudo /etc/init.d/ntp stop
-#
-# Force ntpdate to retrieve current date and time
-sudo /usr/sbin/ntpdate $ntpServer
-#
-# restart ntpd
-sudo /etc/init.d/ntp start
+#!/bin/bash
+
+# Script per verificare la sincronizzazione NTP e impostare l'ora se necessario
+
+# Funzione per verificare lo stato NTP
+check_ntp_status() {
+    # Verifica se ntpq è installato
+    if ! command -v ntpq &> /dev/null; then
+        echo "ntpq non è installato. Verifico con timedatectl..."
+        if command -v timedatectl &> /dev/null; then
+            # Usa timedatectl per verificare la sincronizzazione
+            if timedatectl status | grep -q "synchronized: yes"; then
+                return 0 # Sincronizzato
+            else
+                return 1 # Non sincronizzato
+            fi
+        else
+            echo "Impossibile verificare lo stato NTP. Assumo non sincronizzato."
+            return 1
+        fi
+    fi
+
+    # Usa ntpq per verificare lo stato NTP
+    # Controlla se ci sono server con * o + (indica sincronizzazione)
+    if ntpq -p | grep -q '^\*\|^\+'; then
+        echo "NTP è sincronizzato correttamente."
+        return 0 # Sincronizzato
+    else
+        echo "NTP non è sincronizzato."
+        return 1 # Non sincronizzato
+    fi
+}
+
+# Funzione per impostare l'ora manualmente
+set_time_manually() {
+    echo "Recupero l'ora corretta dallo script lzer0.get.datetime..."
+    
+    # Verifica se lo script esiste ed è eseguibile
+    if [ ! -x "$(command -v /home/lzer0/bin/lzer0.get.datetime)" ]; then
+        echo "Lo script lzer0.get.datetime.bash non è disponibile o non è eseguibile."
+        return 1
+    fi
+    
+    # Esegui lo script e salva l'output
+    datetime_output=$(/home/lzer0/bin/lzer0.get.datetime)
+    
+    # Verifica che l'output sia nel formato atteso (2025/04/29 09:40:51.00)
+    if [[ ! $datetime_output =~ ^[0-9]{4}/[0-9]{2}/[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{2}$ ]]; then
+        echo "Formato di data/ora non valido: $datetime_output"
+        return 1
+    fi
+    
+    # Rimuovi la parte dei centesimi di secondo e converti il formato da 2025/04/29 09:40:51.00 a 2025-04-29 09:40:51
+    formatted_datetime=$(echo "$datetime_output" | sed 's/\([0-9]\{4\}\)\/\([0-9]\{2\}\)\/\([0-9]\{2\}\) \([0-9]\{2\}\):\([0-9]\{2\}\):\([0-9]\{2\}\)\.[0-9]\{2\}/\1-\2-\3 \4:\5:\6/')
+    
+    echo "Imposto la data e l'ora a: $formatted_datetime"
+    
+    # Imposta la data e l'ora del sistema
+    if sudo date -s "$formatted_datetime"; then
+        echo "Data e ora impostate con successo."
+        # Opzionale: scrivi la data nel clock hardware
+        if command -v hwclock &> /dev/null; then
+            sudo hwclock -w
+            echo "Data e ora sincronizzate con l'hardware clock."
+        fi
+        return 0
+    else
+        echo "Errore nell'impostazione della data e dell'ora."
+        return 1
+    fi
+}
+
+# Esecuzione principale
+echo "Controllo lo stato di sincronizzazione NTP..."
+
+if check_ntp_status; then
+    echo "Il sistema è correttamente sincronizzato con NTP."
+else
+    echo "Il sistema non è sincronizzato con NTP. Procedo con l'impostazione manuale dell'ora."
+    set_time_manually
+fi
+
+exit 0
