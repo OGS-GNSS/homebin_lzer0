@@ -18,8 +18,8 @@ from datetime import datetime
 HOST = '127.0.0.1'
 PORT = 5754
 LOG_DIR = "/home/lzer0/log"
-CHECK_INTERVAL = 40    # Intervallo tra i controlli (in secondi)
-RETRY_ATTEMPTS = 3       # Numero di tentativi di connessione prima di agire
+CHECK_INTERVAL = 60    # Intervallo tra i controlli (in secondi)
+RETRY_ATTEMPTS = 5       # Numero di tentativi di connessione prima di agire
 
 def check_connection(host, port, timeout=10):
     """Verifica se il servizio è raggiungibile sulla porta specificata."""
