@@ -1,42 +1,89 @@
-#!/bin/tcsh
-# created by DZ (Nov 2018)
-# modified by sg (mar 25) - Added internal logging
-#
-#********************  DEFAULTS ********************
-set JOB         = `basename $0`
-set CURDIR      = `pwd`
-set EXTDISK     = /mnt/hd
-set STORAGE     = ${EXTDISK}/gnss
-set LOGDIR      = /home/lzer0/log
-set LOGFILE     = ${LOGDIR}/${JOB}.log
+#!/bin/bash
+# Script unico per automontaggio USB - Salva come /usr/local/bin/usb-automount.sh
+# Esegui con crontab ogni minuto: * * * * * /usr/local/bin/usb-automount.sh
 
-# Create log directory if it doesn't exist
-if (! -e ${LOGDIR}) then
-    mkdir -p ${LOGDIR}
-endif
+MOUNT_POINT="/mnt/hd"
+LOG_DIR="/home/lzer0/log"
+LOG_FILE="$LOG_DIR/usb-mount.log"
+USER="lzer0"
+LOCK_FILE="/tmp/usb-automount.lock"
 
-# Redirect all output to logfile
-exec >>& ${LOGFILE}
+# Evita esecuzioni multiple simultanee
+if [ -f "$LOCK_FILE" ]; then
+    exit 0
+fi
+touch "$LOCK_FILE"
 
-# Add timestamp to log entries
-echo "`date`: Starting ${JOB}"
-#
-#mount ${EXTDISK} >& /dev/null
-mount ${EXTDISK}
+# Funzione di cleanup
+cleanup() {
+    rm -f "$LOCK_FILE"
+}
+trap cleanup EXIT
 
-# Ottieni le opzioni di montaggio con findmnt
-set mount_options = `findmnt -no OPTIONS ${EXTDISK}`
-# Estrai il primo token separato da virgola
-set first_option = `echo $mount_options | cut -d, -f1`
+# Crea directory log se non esiste
+mkdir -p "$LOG_DIR"
+chown "$USER:$USER" "$LOG_DIR"
 
-if ("$first_option" != "rw") then
-    echo "`date`: Disk not mounted in read/write mode, proceeding with remount..."
-    mount -o remount,rw ${EXTDISK}
-endif
+# Crea il punto di montaggio se non esiste
+mkdir -p "$MOUNT_POINT"
 
-if (! -e ${STORAGE}) then
-    echo "`date`: Creating storage directory ${STORAGE}"
-    mkdir -p ${STORAGE}
-endif
+# Trova tutti i dispositivi USB disponibili
+USB_DEVICES=($(ls /dev/sd[a-z][0-9]* 2>/dev/null | head -5))
 
-echo "`date`: ${JOB} completed successfully"
+# Controlla se il mount point è già in uso
+CURRENTLY_MOUNTED=""
+if mountpoint -q "$MOUNT_POINT"; then
+    CURRENTLY_MOUNTED=$(findmnt -n -o SOURCE "$MOUNT_POINT" 2>/dev/null)
+fi
+
+# Se abbiamo dispositivi USB
+if [ ${#USB_DEVICES[@]} -gt 0 ]; then
+    # Prendi il primo dispositivo disponibile
+    TARGET_DEVICE="${USB_DEVICES[0]}"
+    
+    # Se non è montato nulla, monta il primo dispositivo
+    if [ -z "$CURRENTLY_MOUNTED" ]; then
+        mount "$TARGET_DEVICE" "$MOUNT_POINT" 2>/dev/null
+        if [ $? -eq 0 ]; then
+            echo "$(date): Montato $TARGET_DEVICE in $MOUNT_POINT" >> "$LOG_FILE"
+            chown "$USER:$USER" "$MOUNT_POINT"
+            chown "$USER:$USER" "$LOG_FILE"
+        else
+            echo "$(date): Errore nel montaggio di $TARGET_DEVICE" >> "$LOG_FILE"
+            chown "$USER:$USER" "$LOG_FILE"
+        fi
+    else
+        # Controlla se il dispositivo attualmente montato è ancora presente
+        DEVICE_STILL_EXISTS=false
+        for device in "${USB_DEVICES[@]}"; do
+            if [ "$device" = "$CURRENTLY_MOUNTED" ]; then
+                DEVICE_STILL_EXISTS=true
+                break
+            fi
+        done
+        
+        # Se il dispositivo montato non esiste più, smonta e monta il nuovo
+        if [ "$DEVICE_STILL_EXISTS" = false ]; then
+            echo "$(date): Dispositivo $CURRENTLY_MOUNTED rimosso, smonto e monto $TARGET_DEVICE" >> "$LOG_FILE"
+            umount "$MOUNT_POINT" 2>/dev/null
+            mount "$TARGET_DEVICE" "$MOUNT_POINT" 2>/dev/null
+            if [ $? -eq 0 ]; then
+                echo "$(date): Montato nuovo dispositivo $TARGET_DEVICE in $MOUNT_POINT" >> "$LOG_FILE"
+                chown "$USER:$USER" "$MOUNT_POINT"
+            else
+                echo "$(date): Errore nel montaggio di $TARGET_DEVICE" >> "$LOG_FILE"
+            fi
+            chown "$USER:$USER" "$LOG_FILE"
+        fi
+    fi
+else
+    # Nessun dispositivo USB trovato
+    if [ -n "$CURRENTLY_MOUNTED" ]; then
+        echo "$(date): Nessun dispositivo USB trovato, smonto $CURRENTLY_MOUNTED" >> "$LOG_FILE"
+        umount "$MOUNT_POINT" 2>/dev/null
+        chown "$USER:$USER" "$LOG_FILE"
+    fi
+fi
+
+# Assicura sempre che il log sia di proprietà dell'utente
+chown "$USER:$USER" "$LOG_FILE" 2>/dev/null
