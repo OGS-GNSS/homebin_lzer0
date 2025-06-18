@@ -97,7 +97,6 @@ PATH=/home/lzer0/bin:/usr/local/bin:/usr/bin:/bin
 #@reboot sleep 60; /home/lzer0/bin/lzer0.set.datetime >/dev/null 2>&1
 
 ### Gestione storage USB
-@reboot sleep 80; /home/lzer0/bin/lzer0.mount.storage >/dev/null 2>&1
 @reboot sleep 100; /home/lzer0/bin/lzer0.check.storage >/dev/null 2>&1
 ### Verifica spazio libero ogni ora
 1 * * * * /home/lzer0/bin/lzer0.check.storage >/dev/null 2>&1
@@ -161,6 +160,7 @@ Il crontab di **root** è configurato per garantire la connettività e il monito
 @reboot /home/lzer0/bin/lzer0.start.4GNet >/dev/null 2>&1
 @reboot /home/lzer0/bin/lzer0.check.connection >&1
 */2 * * * * /home/lzer0/bin/lzer0.set.datetime > /home/lzer0/log/lzer0.set.datetime.log 2>&1
+* * * * * /home/lzer0/bin/lzer0.mount.storage >/dev/null 2>&1
 
 ```
 
