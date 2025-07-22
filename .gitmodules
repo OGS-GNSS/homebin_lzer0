@@ -1,0 +1,3 @@
+[submodule "PiJuice"]
+	path = PiJuice
+	url = https://github.com/PiSupply/PiJuice.git
