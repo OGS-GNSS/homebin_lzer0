@@ -1,3 +1,9 @@
+### About the LZER0 Project
+This repository is part of the broader LZER0 ecosystem — a modular GNSS platform developed by OGS.
+To get an overview of the hardware, software, deployment procedures, and related tools, please refer to the main repository:
+
+[OGS-GNSS/LZER0](https://github.com/OGS-GNSS/LZER0)
+
 # LZER0 Bin
 
 **lzer0** è una soluzione integrata per la gestione ed elaborazione in tempo reale dei dati GNSS. Il progetto sfrutta una serie di script eseguiti tramite crontab per automatizzare diverse attività fondamentali, garantendo una gestione completa e affidabile del sistema.
