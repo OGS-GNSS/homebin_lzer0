@@ -9,7 +9,7 @@ set CURDIR      		= `pwd`
 set KEYWORDS			= (ser2net str2str)
 set DEVMANPERFIX 		= lzer0.manage
 set LOG_DIR			= /home/lzer0/log/
-set LOG_FILE = "$LOG_DIR/`date +%d%b%Y`.lzer0.manage.serialport.check.log"
+set LOG_FILE = "$LOG_DIR/lzer0.manage.serialport.check.log"
 
 # If no arguments are passed it outputs script usage
 if (${%argv} == 0) then
