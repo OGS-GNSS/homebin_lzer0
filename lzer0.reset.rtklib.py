@@ -58,15 +58,8 @@ def restart_rtkrcv():
         kill_cmd = "ps -ef | grep rtkrcv | awk '{print $2}' | xargs kill -9"
         subprocess.run(kill_cmd, shell=True)
         
-        # Attende un paio di secondi per la chiusura
-        time.sleep(2)
-        
-        # Inserisci qui il comando per riavviare rtkrcv, ad es.:
-        # start_cmd = "cd /path/to/rtkrcv && /usr/local/bin/rtkrcv -s -o /path/to/config.conf"
-        # subprocess.run(start_cmd, shell=True)
-        
         # Attende l'avvio del servizio
-        time.sleep(5)
+        time.sleep(60)
         
         return True
     except Exception as e:
@@ -79,7 +72,7 @@ def log_event(message):
     timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
     today = now.strftime("%Y-%m-%d")
     os.makedirs(LOG_DIR, exist_ok=True)
-    log_file = f"{LOG_DIR}/{today}-resetrtklib.log"
+    log_file = f"{LOG_DIR}/lzer0.resetrtklib.log"
     with open(log_file, "a") as file:
         file.write(f"[ {timestamp} ] - {message}\n")
     print(f"[ {timestamp} ] - {message}")
