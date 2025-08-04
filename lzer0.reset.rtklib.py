@@ -1,154 +1,309 @@
 #!/usr/bin/env python3
 """
 Creato da Simone Galvi con miglioramenti (Aprile 2025)
-Programma che monitora rtkrcv e lo riavvia quando:
-1. è bloccato (non risponde sulla porta)
-2. Non è in stato "1" (rtk fix OK) oppure in casi di status problematici:
-   - se lo status è "2": attende 5 minuti e, se dopo 5 minuti non torna a "1", uccide il processo
-   - se lo status è "5": se appare per 3 letture consecutive (circa 3 minuti) uccide il processo
-   - se lo status è ambiguo (diverso da "1", "2" o "5"): uccide il processo
+Programma che monitora rtkrcv e lo riavvia quando necessario.
+Ottimizzato per esecuzione come daemon via crontab @reboot.
+
+Condizioni di riavvio:
+1. Servizio non raggiungibile sulla porta
+2. Status problematici:
+   - "2": attende 5 minuti, se non torna a "1" riavvia
+   - "5": se persiste per 3+ letture consecutive (3+ minuti) riavvia
+   - Ambiguo/errore: 5 tentativi ogni 40s, poi riavvia
+   - Altri valori: riavvia immediatamente
 """
 
 import socket
 import time
 import os
 import subprocess
+import sys
+import signal
 from datetime import datetime
+from dataclasses import dataclass
+from typing import Optional
 
-HOST = '127.0.0.1'
-PORT = 5754
-LOG_DIR = "/home/lzer0/log"
-CHECK_INTERVAL = 60    # Intervallo tra i controlli (in secondi)
-RETRY_ATTEMPTS = 5       # Numero di tentativi di connessione prima di agire
+# Configurazione
+@dataclass
+class Config:
+    HOST: str = '127.0.0.1'
+    PORT: int = 5754
+    LOG_DIR: str = "/home/lzer0/log"
+    PIDFILE: str = "/home/lzer0/log/lzer0.resetrtklib.pid"
+    CHECK_INTERVAL: int = 60
+    CONNECTION_RETRY_ATTEMPTS: int = 5
+    STATUS_RETRY_INTERVAL: int = 40
+    STATUS_RETRY_ATTEMPTS: int = 5
+    STATUS_2_WAIT_TIME: int = 300  # 5 minuti
+    STATUS_5_TIME_THRESHOLD: int = 180  # 3 minuti
+    STATUS_5_COUNT_THRESHOLD: int = 3
+    SOCKET_TIMEOUT: int = 10
+    SOCAT_TIMEOUT: int = 10
+    RESTART_WAIT_TIME: int = 60
+    STARTUP_DELAY: int = 120  # Attesa iniziale per stabilizzazione sistema
 
-def check_connection(host, port, timeout=10):
-    """Verifica se il servizio è raggiungibile sulla porta specificata."""
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
-        sock.connect((host, port))
-        return True
-    except socket.error:
-        return False
-    finally:
+config = Config()
+
+class RTKMonitor:
+    def __init__(self):
+        self.connection_attempts = 0
+        self.status5_count = 0
+        self.status5_start = None
+        self.shutdown_requested = False
+        self._setup_daemon()
+    
+    def _setup_daemon(self) -> None:
+        """Configura il processo come daemon."""
+        self._ensure_log_dir()
+        self._write_pidfile()
+        self._setup_signal_handlers()
+        
+        # Redirect stdout/stderr al log per catturare tutti gli output
+        log_file = f"{config.LOG_DIR}/lzer0.resetrtklib.log"
+        sys.stdout = open(log_file, 'a', buffering=1)
+        sys.stderr = sys.stdout
+    
+    def _write_pidfile(self) -> None:
+        """Scrive il PID del processo corrente."""
         try:
-            sock.close()
+            with open(config.PIDFILE, 'w') as f:
+                f.write(str(os.getpid()))
         except Exception as e:
-            print(f"Errore durante la chiusura del socket: {e}")
-
-def get_rtk_status():
-    """Ottiene lo stato di rtkrcv eseguendo il comando socat e restituisce il sesto valore."""
-    try:
-        # Invia il comando "solution" e ottiene la prima riga della risposta
-        cmd = f"echo 'solution' | socat tcp:{HOST}:{PORT} - | head -n 1"
-        output = subprocess.check_output(cmd, shell=True, text=True, timeout=10)
-        values = output.strip().split()
-        if len(values) >= 6:
-            status = values[5]
-            return status
-        return "UNKNOWN"
-    except Exception as e:
-        print(f"Errore durante l'ottenimento dello status: {e}")
-        return "ERROR"
-
-def restart_rtkrcv():
-    """Uccide e riavvia il processo rtkrcv."""
-    try:
-        # Uccide il processo rtkrcv
-        kill_cmd = "ps -ef | grep rtkrcv | awk '{print $2}' | xargs kill -9"
-        subprocess.run(kill_cmd, shell=True)
-        
-        # Attende l'avvio del servizio
-        time.sleep(60)
-        
-        return True
-    except Exception as e:
-        print(f"Errore durante il riavvio di rtkrcv: {e}")
-        return False
-
-def log_event(message):
-    """Registra un evento nel log giornaliero."""
-    now = datetime.now()
-    timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
-    today = now.strftime("%Y-%m-%d")
-    os.makedirs(LOG_DIR, exist_ok=True)
-    log_file = f"{LOG_DIR}/lzer0.resetrtklib.log"
-    with open(log_file, "a") as file:
-        file.write(f"[ {timestamp} ] - {message}\n")
-    print(f"[ {timestamp} ] - {message}")
-
-def monitor_rtkrcv():
-    """Funzione principale di monitoraggio di rtkrcv."""
-    connection_attempts = 0
-    status5_count = 0     # Conta quante volte consecutive lo status è "5"
-    status5_start = None  # Memorizza il tempo del primo status "5" della sequenza
+            print(f"Errore scrittura pidfile: {e}")
     
-    print(f"Monitoraggio di rtkrcv su {HOST}:{PORT} avviato...")
-    log_event("Monitoraggio rtkrcv avviato")
+    def _cleanup_pidfile(self) -> None:
+        """Rimuove il pidfile."""
+        try:
+            if os.path.exists(config.PIDFILE):
+                os.remove(config.PIDFILE)
+        except Exception as e:
+            self._log(f"Errore rimozione pidfile: {e}")
     
-    while True:
-        if check_connection(HOST, PORT):
-            connection_attempts = 0
+    def _setup_signal_handlers(self) -> None:
+        """Configura i gestori dei segnali per shutdown pulito."""
+        def signal_handler(signum, frame):
+            self._log(f"Ricevuto segnale {signum}. Avvio shutdown...")
+            self.shutdown_requested = True
+        
+        signal.signal(signal.SIGTERM, signal_handler)
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGHUP, signal_handler)
+    
+    def _ensure_log_dir(self) -> None:
+        """Crea la directory di log se non esiste."""
+        os.makedirs(config.LOG_DIR, exist_ok=True)
+    
+    def _check_connection(self) -> bool:
+        """Verifica se il servizio è raggiungibile."""
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(config.SOCKET_TIMEOUT)
+                sock.connect((config.HOST, config.PORT))
+                return True
+        except socket.error:
+            return False
+    
+    def _get_rtk_status(self) -> str:
+        """Ottiene lo stato RTK corrente."""
+        try:
+            cmd = f"echo 'solution' | socat tcp:{config.HOST}:{config.PORT} - | head -n 1"
+            output = subprocess.check_output(
+                cmd, shell=True, text=True, timeout=config.SOCAT_TIMEOUT
+            )
+            values = output.strip().split()
+            return values[5] if len(values) >= 6 else "UNKNOWN"
+        except Exception as e:
+            self._log(f"Errore nell'ottenere lo status: {e}")
+            return "ERROR"
+    
+    def _get_rtk_status_with_retry(self) -> str:
+        """Ottiene lo status RTK con tentativi multipli per errori."""
+        for attempt in range(config.STATUS_RETRY_ATTEMPTS):
+            status = self._get_rtk_status()
             
-            status = get_rtk_status()
-            if status in ["ERROR", "UNKNOWN"]:
-                log_event("Status ambiguo o errore nell'ottenere lo status. Riavvio rtkrcv...")
-                restart_rtkrcv()
-                # Resetta il contatore status5 se presente
-                status5_count = 0
-                status5_start = None
-            else:
-                log_event(f"Status rtkrcv: {status}")
-                if status == "1":
-                    # Stato OK: resettare qualsiasi contatore
-                    status5_count = 0
-                    status5_start = None
-                elif status == "2":
-                    log_event("Status è 2: attendo 5 minuti per verificare la ripresa a '1'...")
-                    time.sleep(300)  # Attende 5 minuti
-                    new_status = get_rtk_status()
-                    log_event(f"Dopo 5 minuti il nuovo status è: {new_status}")
-                    if new_status != "1":
-                        log_event("Status non è tornato a 1. Riavvio rtkrcv...")
-                        restart_rtkrcv()
-                    # Resetta i contatori altrimenti
-                    status5_count = 0
-                    status5_start = None
-                elif status == "5":
-                    # Se lo status è "5", gestiamo il conteggio e la finestra temporale di 3 minuti
-                    if status5_count == 0:
-                        status5_start = time.time()
-                    status5_count += 1
-                    elapsed = time.time() - status5_start if status5_start else 0
-                    if elapsed >= 180 and status5_count >= 3:
-                        log_event("Status '5' per più di 3 minuti (più di 3 letture consecutive). Riavvio rtkrcv...")
-                        restart_rtkrcv()
-                        status5_count = 0
-                        status5_start = None
-                else:
-                    # Se lo status non è "1", "2" o "5", consideriamo la situazione ambigua
-                    log_event(f"Status ambiguo ({status}). Riavvio rtkrcv...")
-                    restart_rtkrcv()
-                    status5_count = 0
-                    status5_start = None
-                    
-        else:
-            connection_attempts += 1
-            log_event(f"Impossibile connettersi a {HOST}:{PORT} (tentativo {connection_attempts}/{RETRY_ATTEMPTS})")
-            if connection_attempts >= RETRY_ATTEMPTS:
-                log_event(f"Impossibile connettersi per {RETRY_ATTEMPTS} tentativi consecutivi. Riavvio rtkrcv...")
-                restart_rtkrcv()
-                connection_attempts = 0
+            if status not in ["ERROR", "UNKNOWN"]:
+                return status
+            
+            self._log(f"Status ambiguo ({status}) - tentativo {attempt + 1}/{config.STATUS_RETRY_ATTEMPTS}")
+            if attempt < config.STATUS_RETRY_ATTEMPTS - 1:
+                time.sleep(config.STATUS_RETRY_INTERVAL)
         
-        time.sleep(CHECK_INTERVAL)
+        self._log(f"Impossibile ottenere status valido dopo {config.STATUS_RETRY_ATTEMPTS} tentativi")
+        return "FAILED"
+    
+    def _restart_rtkrcv(self) -> bool:
+        """Uccide e riavvia il processo rtkrcv."""
+        try:
+            self._log("Riavvio rtkrcv in corso...")
+            
+            # Uccidi tutti i processi rtkrcv più robustamente
+            kill_commands = [
+                "pkill -f rtkrcv",
+                "ps -ef | grep '[r]tkrcv' | awk '{print $2}' | xargs -r kill -9"
+            ]
+            
+            for cmd in kill_commands:
+                try:
+                    subprocess.run(cmd, shell=True, check=False, timeout=30)
+                    time.sleep(2)
+                except subprocess.TimeoutExpired:
+                    self._log("Timeout durante kill del processo")
+            
+            time.sleep(config.RESTART_WAIT_TIME)
+            self._reset_status5_tracking()
+            return True
+        except Exception as e:
+            self._log(f"Errore durante il riavvio di rtkrcv: {e}")
+            return False
+    
+    def _reset_status5_tracking(self) -> None:
+        """Resetta il tracking dello status 5."""
+        self.status5_count = 0
+        self.status5_start = None
+    
+    def _handle_status5(self) -> bool:
+        """Gestisce lo status 5. Restituisce True se il processo deve essere riavviato."""
+        if self.status5_count == 0:
+            self.status5_start = time.time()
+        
+        self.status5_count += 1
+        elapsed = time.time() - (self.status5_start or 0)
+        
+        if elapsed >= config.STATUS_5_TIME_THRESHOLD and self.status5_count >= config.STATUS_5_COUNT_THRESHOLD:
+            self._log("Status '5' persistente per oltre 3 minuti. Riavvio necessario.")
+            return True
+        
+        return False
+    
+    def _handle_status2(self) -> bool:
+        """Gestisce lo status 2. Restituisce True se il processo deve essere riavviato."""
+        self._log(f"Status 2: attendo {config.STATUS_2_WAIT_TIME//60} minuti per verifica...")
+        time.sleep(config.STATUS_2_WAIT_TIME)
+        
+        new_status = self._get_rtk_status()
+        self._log(f"Status dopo attesa: {new_status}")
+        
+        if new_status != "1":
+            self._log("Status non tornato a 1. Riavvio necessario.")
+            return True
+        
+        return False
+    
+    def _process_status(self, status: str) -> bool:
+        """Processa lo status e determina se è necessario un riavvio."""
+        if status == "FAILED":
+            self._log("Status fallito dopo tutti i tentativi. Riavvio necessario.")
+            return True
+        
+        self._log(f"Status rtkrcv: {status}")
+        
+        if status == "1":
+            self._reset_status5_tracking()
+            return False
+        elif status == "2":
+            restart_needed = self._handle_status2()
+            self._reset_status5_tracking()
+            return restart_needed
+        elif status == "5":
+            return self._handle_status5()
+        else:
+            self._log(f"Status non riconosciuto ({status}). Riavvio necessario.")
+            return True
+    
+    def _handle_connection_failure(self) -> bool:
+        """Gestisce i fallimenti di connessione. Restituisce True se è necessario un riavvio."""
+        self.connection_attempts += 1
+        self._log(f"Connessione fallita ({self.connection_attempts}/{config.CONNECTION_RETRY_ATTEMPTS})")
+        
+        if self.connection_attempts >= config.CONNECTION_RETRY_ATTEMPTS:
+            self._log("Troppi fallimenti di connessione consecutivi. Riavvio necessario.")
+            self.connection_attempts = 0
+            return True
+        
+        return False
+    
+    def _log(self, message: str) -> None:
+        """Registra un evento nel log con flush immediato."""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_entry = f"[ {timestamp} ] [PID:{os.getpid()}] - {message}\n"
+        
+        try:
+            log_file = f"{config.LOG_DIR}/lzer0.resetrtklib.log"
+            with open(log_file, "a") as f:
+                f.write(log_entry)
+                f.flush()  # Forza la scrittura immediata
+            
+            # Output anche su stdout per crontab
+            print(log_entry.strip())
+            sys.stdout.flush()
+        except Exception as e:
+            # Fallback su stderr se il log file non è accessibile
+            print(f"ERRORE LOG: {e} - {log_entry.strip()}", file=sys.stderr)
+    
+    def monitor(self) -> None:
+        """Funzione principale di monitoraggio."""
+        self._log("Monitoraggio rtkrcv avviato")
+        self._log(f"Attesa iniziale di {config.STARTUP_DELAY} secondi per stabilizzazione sistema...")
+        time.sleep(config.STARTUP_DELAY)
+        
+        while not self.shutdown_requested:
+            try:
+                if self._check_connection():
+                    self.connection_attempts = 0
+                    status = self._get_rtk_status_with_retry()
+                    
+                    if self._process_status(status):
+                        self._restart_rtkrcv()
+                else:
+                    if self._handle_connection_failure():
+                        self._restart_rtkrcv()
+                
+                # Check periodico per shutdown durante il sleep
+                for _ in range(config.CHECK_INTERVAL):
+                    if self.shutdown_requested:
+                        break
+                    time.sleep(1)
+                
+            except Exception as e:
+                self._log(f"Errore imprevisto: {e}")
+                # Attesa breve prima di riprovare
+                for _ in range(min(config.CHECK_INTERVAL, 30)):
+                    if self.shutdown_requested:
+                        break
+                    time.sleep(1)
+        
+        self._log("Shutdown del monitoraggio completato")
+        self._cleanup_pidfile()
+
+def main():
+    """Punto di ingresso principale per daemon."""
+    # Verifica se un'altra istanza è già in esecuzione
+    if os.path.exists(config.PIDFILE):
+        try:
+            with open(config.PIDFILE, 'r') as f:
+                old_pid = int(f.read().strip())
+            
+            # Controlla se il processo è ancora attivo
+            try:
+                os.kill(old_pid, 0)  # Signal 0 solo per verificare esistenza
+                print(f"ERRORE: Un'altra istanza è già in esecuzione (PID: {old_pid})")
+                sys.exit(1)
+            except OSError:
+                # Il processo non esiste più, rimuovi il pidfile stale
+                os.remove(config.PIDFILE)
+                print("Rimosso pidfile obsoleto")
+        except (ValueError, FileNotFoundError):
+            # Pidfile corrotto o non trovato, procedi
+            pass
+    
+    monitor = RTKMonitor()
+    try:
+        monitor.monitor()
+    except Exception as e:
+        monitor._log(f"Errore fatale: {e}")
+        sys.exit(1)
+    finally:
+        monitor._cleanup_pidfile()
 
 if __name__ == "__main__":
-    try:
-        monitor_rtkrcv()
-    except KeyboardInterrupt:
-        log_event("Monitoraggio interrotto dall'utente")
-        print("\nMonitoraggio interrotto. Uscita...")
-    except Exception as e:
-        log_event(f"Errore imprevisto: {e}")
-        print(f"Errore imprevisto: {e}")
-
+    main()
