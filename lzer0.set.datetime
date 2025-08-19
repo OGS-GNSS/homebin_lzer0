@@ -2,42 +2,13 @@
 
 # Script per verificare la sincronizzazione NTP e impostare l'ora se necessario
 
-# Funzione per verificare lo stato NTP
-check_ntp_status() {
-    # Verifica se ntpq è installato
-    if ! command -v ntpq &> /dev/null; then
-        echo "ntpq non è installato. Verifico con timedatectl..."
-        if command -v timedatectl &> /dev/null; then
-            # Usa timedatectl per verificare la sincronizzazione
-            if timedatectl status | grep -q "synchronized: yes"; then
-                return 0 # Sincronizzato
-            else
-                return 1 # Non sincronizzato
-            fi
-        else
-            echo "Impossibile verificare lo stato NTP. Assumo non sincronizzato."
-            return 1
-        fi
-    fi
-
-    # Usa ntpq per verificare lo stato NTP
-    # Controlla se ci sono server con * o + (indica sincronizzazione)
-    if ntpq -p | grep -q '^\*\|^\+'; then
-        echo "NTP è sincronizzato correttamente."
-        return 0 # Sincronizzato
-    else
-        echo "NTP non è sincronizzato."
-        return 1 # Non sincronizzato
-    fi
-}
-
 # Funzione per impostare l'ora manualmente
 set_time_manually() {
     echo "Recupero l'ora corretta dallo script lzer0.get.datetime..."
     
     # Verifica se lo script esiste ed è eseguibile
     if [ ! -x "$(command -v /home/lzer0/bin/lzer0.get.datetime)" ]; then
-        echo "Lo script lzer0.get.datetime.bash non è disponibile o non è eseguibile."
+        echo "Lo script lzer0.get.datetime non è disponibile o non è eseguibile."
         return 1
     fi
     
@@ -70,14 +41,50 @@ set_time_manually() {
     fi
 }
 
-# Esecuzione principale
-echo "Controllo lo stato di sincronizzazione NTP..."
+# Funzione per verificare lo stato NTP
+check_ntp_status() {
+    # Verifica se ntpq è installato
+    if ! command -v ntpq &> /dev/null; then
+        echo "ntpq non è installato. Verifico con timedatectl..."
+        if command -v timedatectl &> /dev/null; then
+            # Usa timedatectl per verificare la sincronizzazione
+            if timedatectl status | grep -q "synchronized: yes"; then
+                return 0 # Sincronizzato
+            else
+                return 1 # Non sincronizzato
+            fi
+        else
+            echo "Impossibile verificare lo stato NTP. Assumo non sincronizzato."
+            return 1
+        fi
+    fi
 
-if check_ntp_status; then
-    echo "Il sistema è correttamente sincronizzato con NTP."
+    # Usa ntpq per verificare lo stato NTP
+    # Controlla se ci sono server con * o + (indica sincronizzazione)
+    # Uso head per evitare il broken pipe error quando grep trova una corrispondenza e chiude la pipe
+    if ntpq -p 2>/dev/null | head -n 20 | grep -q '^\*\|^\+'; then
+        echo "NTP è sincronizzato correttamente."
+        return 0 # Sincronizzato
+    else
+        echo "NTP non è sincronizzato."
+        return 1 # Non sincronizzato
+    fi
+}
+
+# Esecuzione principale
+echo "Tentativo di impostazione manuale dell'ora..."
+
+if set_time_manually; then
+    echo "Ora impostata manualmente con successo."
 else
-    echo "Il sistema non è sincronizzato con NTP. Procedo con l'impostazione manuale dell'ora."
-    set_time_manually
+    echo "Impossibile impostare l'ora manualmente. Controllo lo stato di sincronizzazione NTP..."
+    
+    if check_ntp_status; then
+        echo "Il sistema è correttamente sincronizzato con NTP."
+    else
+        echo "ATTENZIONE: Né l'impostazione manuale né la sincronizzazione NTP sono disponibili."
+        exit 1
+    fi
 fi
 
 exit 0
