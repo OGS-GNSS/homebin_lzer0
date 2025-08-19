@@ -99,8 +99,8 @@ PATH=/home/lzer0/bin:/usr/local/bin:/usr/bin:/bin
 @reboot sleep 60; nohup python3 /home/lzer0/bin/lzer0.reset.rtklib.py >&1
 
 ### Gestione data/ora (utilizza messaggi NMEA da porte TCP U-Blox)
-* * * * * /home/lzer0/bin/lzer0.get.datetime >/dev/null 2>&1
-#@reboot sleep 60; /home/lzer0/bin/lzer0.set.datetime >/dev/null 2>&1
+#* */2 * * * /home/lzer0/bin/lzer0.get.datetime >/dev/null 2>&1
+@reboot sleep 60; /home/lzer0/bin/lzer0.set.datetime >/dev/null 2>&1
 
 ### Gestione storage USB
 @reboot sleep 100; /home/lzer0/bin/lzer0.check.storage >/dev/null 2>&1
