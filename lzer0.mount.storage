@@ -1,6 +1,4 @@
 #!/bin/bash
-# Script unico per automontaggio USB - Salva come /usr/local/bin/usb-automount.sh
-# Esegui con crontab ogni minuto: * * * * * /usr/local/bin/usb-automount.sh
 
 MOUNT_POINT="/mnt/hd"
 LOG_DIR="/home/lzer0/log"
@@ -43,7 +41,7 @@ if [ ${#USB_DEVICES[@]} -gt 0 ]; then
     
     # Se non è montato nulla, monta il primo dispositivo
     if [ -z "$CURRENTLY_MOUNTED" ]; then
-        mount "$TARGET_DEVICE" "$MOUNT_POINT" 2>/dev/null
+        mount -o uid=$(id -u "$USER"),gid=$(id -g "$USER"),umask=022 "$TARGET_DEVICE" "$MOUNT_POINT"
         if [ $? -eq 0 ]; then
             echo "$(date): Montato $TARGET_DEVICE in $MOUNT_POINT" >> "$LOG_FILE"
             chown "$USER:$USER" "$MOUNT_POINT"
@@ -66,7 +64,7 @@ if [ ${#USB_DEVICES[@]} -gt 0 ]; then
         if [ "$DEVICE_STILL_EXISTS" = false ]; then
             echo "$(date): Dispositivo $CURRENTLY_MOUNTED rimosso, smonto e monto $TARGET_DEVICE" >> "$LOG_FILE"
             umount "$MOUNT_POINT" 2>/dev/null
-            mount "$TARGET_DEVICE" "$MOUNT_POINT" 2>/dev/null
+            mount -o uid=$(id -u "$USER"),gid=$(id -g "$USER"),umask=022 "$TARGET_DEVICE" "$MOUNT_POINT"
             if [ $? -eq 0 ]; then
                 echo "$(date): Montato nuovo dispositivo $TARGET_DEVICE in $MOUNT_POINT" >> "$LOG_FILE"
                 chown "$USER:$USER" "$MOUNT_POINT"
