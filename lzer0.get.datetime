@@ -1,4 +1,4 @@
-#!/bin/bash -xvf
+#!/bin/bash
 # created  by DZ (5 Apr 2024)
 # recovers date and time from LZER0 data stream 
 # made in bash because tsch does not support error redirecting and socat causese a broken pipe at the 1st exit status
