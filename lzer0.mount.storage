@@ -6,6 +6,30 @@ LOG_FILE="$LOG_DIR/usb-mount.log"
 USER="lzer0"
 LOCK_FILE="/tmp/usb-automount.lock"
 
+fs_mount() {
+    local target_device="$1"
+    local mount_point="$2"
+    local user="${3:-$USER}"
+
+    # Rileva il tipo di filesystem
+    local fs_type=$(sudo file -s "$target_device" | grep -o -E '(ext[2-4]|vfat|NTFS|exFAT)' | head -1)
+
+    # Monta in base al tipo di filesystem
+    case "$fs_type" in
+        "ext2"|"ext3"|"ext4"|"xfs"|"btrfs")
+            # Filesystem Unix - mount senza opzioni uid/gid
+            sudo mount "$target_device" "$mount_point"
+            ;;
+        "vfat"|"ntfs"|"exfat")
+            # Filesystem non-Unix - mount con opzioni uid/gid
+            sudo mount -o uid=$(id -u "$user"),gid=$(id -g "$user"),umask=022 "$target_device" "$mount_point"
+            ;;
+        *)
+            # Default - mount semplice
+            sudo mount "$target_device" "$mount_point"
+            ;;
+    esac
+}
 # Evita esecuzioni multiple simultanee
 if [ -f "$LOCK_FILE" ]; then
     exit 0
@@ -38,10 +62,11 @@ fi
 if [ ${#USB_DEVICES[@]} -gt 0 ]; then
     # Prendi il primo dispositivo disponibile
     TARGET_DEVICE="${USB_DEVICES[0]}"
-    
-    # Se non è montato nulla, monta il primo dispositivo
+
+
+  # Se non è montato nulla, monta il primo dispositivo
     if [ -z "$CURRENTLY_MOUNTED" ]; then
-        mount -o uid=$(id -u "$USER"),gid=$(id -g "$USER"),umask=022 "$TARGET_DEVICE" "$MOUNT_POINT"
+        fs_mount "$TARGET_DEVICE" "$MOUNT_POINT" "$USER"
         if [ $? -eq 0 ]; then
             echo "$(date): Montato $TARGET_DEVICE in $MOUNT_POINT" >> "$LOG_FILE"
             chown "$USER:$USER" "$MOUNT_POINT"
@@ -59,12 +84,12 @@ if [ ${#USB_DEVICES[@]} -gt 0 ]; then
                 break
             fi
         done
-        
+
         # Se il dispositivo montato non esiste più, smonta e monta il nuovo
         if [ "$DEVICE_STILL_EXISTS" = false ]; then
             echo "$(date): Dispositivo $CURRENTLY_MOUNTED rimosso, smonto e monto $TARGET_DEVICE" >> "$LOG_FILE"
             umount "$MOUNT_POINT" 2>/dev/null
-            mount -o uid=$(id -u "$USER"),gid=$(id -g "$USER"),umask=022 "$TARGET_DEVICE" "$MOUNT_POINT"
+            fs_mount "$TARGET_DEVICE" "$MOUNT_POINT" "$USER"
             if [ $? -eq 0 ]; then
                 echo "$(date): Montato nuovo dispositivo $TARGET_DEVICE in $MOUNT_POINT" >> "$LOG_FILE"
                 chown "$USER:$USER" "$MOUNT_POINT"
