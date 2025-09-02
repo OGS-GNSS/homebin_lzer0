@@ -1,7 +1,34 @@
 #!/bin/bash
+# Created by S. Galvi (Last modified: Sept 2025)
 
-# Funzione per controllare la connessione a Internet
-check_connection() {
+start_connection="/home/lzer0/bin/lzer0.start.4GNet"
+interval=30  # seconds
+log_file="/home/lzer0/log/lzer0.check.connection.log"
+mkdir -p "$(dirname "$log_file")"
+
+# Funzione per il logging
+log() {
+    local message="$1"
+    local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+    echo "[$timestamp] $message" | tee -a "$log_file"
+    echo "$message"
+}
+
+# Verifica che lo script sia eseguito con sudo
+if [ "$EUID" -ne 0 ]; then
+    log "Error: This script must be run as root"
+    exit 1
+fi
+
+check_vpn_connection() {
+    # Ping al server vpn
+    if ping -c 1 10.55.66.1 &> /dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+check_google_connection() {
     # Ping al DNS di Google
     if ping -c 1 8.8.8.8 &> /dev/null; then
         return 0
@@ -10,122 +37,47 @@ check_connection() {
     fi
 }
 
-# Funzione per verificare se il modulo 4G è presente e funzionante
-check_4g_module() {
-    # Controlla se il dispositivo cdc-wdm0 esiste
-    if [ -e /dev/cdc-wdm0 ]; then
-        # Controlla se l'interfaccia wwan0 esiste
-        if ip link show wwan0 &> /dev/null; then
-            # Controlla se qmicli è installato
-            if command -v qmicli &> /dev/null; then
-                # Testa se il modulo risponde
-                if timeout 10 qmicli -d /dev/cdc-wdm0 --dms-get-manufacturer &> /dev/null; then
-                    return 0
-                fi
-            fi
-        fi
-    fi
-    return 1
-}
 
-log_error() {
-    local msg="$1"
-    local log_file="/home/lzer0/simodir/log/$(date +%Y-%m-%d).log"
-    # Crea la directory di log se non esiste
-    mkdir -p "$(dirname "$log_file")"
-    echo "$(date +'%Y-%m-%d %H:%M:%S') - ERROR - $msg" >> "$log_file"
-}
+log "Starting connection monitoring..."
 
-log_info() {
-    local msg="$1"
-    local log_file="/home/lzer0/simodir/log/$(date +%Y-%m-%d).log"
-    # Crea la directory di log se non esiste
-    mkdir -p "$(dirname "$log_file")"
-    echo "$(date +'%Y-%m-%d %H:%M:%S') - INFO - $msg" >> "$log_file"
-}
-
-# Variabile per tracciare il tempo senza connessione
-no_connection_time=0
-
-# Intervallo di controllo (in secondi)
-interval=60
-
-# Flag per indicare se il modulo 4G è disponibile
-has_4g_module=false
-
-# Controlla inizialmente se il modulo 4G è disponibile
-if check_4g_module; then
-    has_4g_module=true
-    log_info "Modulo 4G rilevato e funzionante"
-else
-    log_info "Modulo 4G non rilevato o non funzionante - modalità monitoraggio passivo"
-fi
-
-# Loop infinito
 while true; do
-    if check_connection; then
-        echo "Connessione attiva"
-        no_connection_time=0
-        
-        # Se prima non avevamo il modulo 4G, ricontrolliamo
-        if [ "$has_4g_module" = false ]; then
-            if check_4g_module; then
-                has_4g_module=true
-                log_info "Modulo 4G ora disponibile"
-            fi
-        fi
+    if ip link show | grep -q 'eth0:'; then
+        log "eth0 interface detected. Suspending lte connection check."
     else
-        echo "Connessione assente"
-        no_connection_time=$((no_connection_time + interval))
-        
-        # Se non abbiamo il modulo 4G, ricontrolliamo periodicamente
-        if [ "$has_4g_module" = false ]; then
-            if check_4g_module; then
-                has_4g_module=true
-                log_info "Modulo 4G ora disponibile"
+    	try=0
+    	# Testa la connessione ogni 30 secondi, per un massimo di 5 tentativi
+    	while [ $try -lt 5 ]; do
+    	    if check_vpn_connection; then
+                log "Connection is up."
+        	try=0
+            elif check_google_connection; then
+                log "VPN connection is down, but Google is reachable."
+                try=0
             else
-                log_info "Connessione assente da $((no_connection_time/60)) minuti - Modulo 4G non disponibile, continuo monitoraggio"
-                # Aspetta l'intervallo specificato prima del prossimo controllo
-                sleep $interval
-                continue
+                try=$((try + 1))
+                log "Connection is down. Trying to reconnect... ${try}"
+                "$start_connection"
             fi
-        fi
-        
-        # Solo se abbiamo il modulo 4G, procediamo con i tentativi di ripristino
-        if [ "$has_4g_module" = true ] && [ $no_connection_time -ge 300 ]; then
-            log_error "Connessione assente da piu di 5 minuti, eseguo lo script provider.startup.sh"
-            
-            # Controlla se lo script esiste prima di eseguirlo
-            if [ -f "/home/lzer0/bin/lzer0.provider.4g.setup" ]; then
-                /home/lzer0/bin/lzer0.provider.4g.setup
-            elif [ -f "/home/lzer0/bin/lzer0.start.4gnet.sh" ]; then
-                sudo /home/lzer0/bin/lzer0.start.4gnet.sh
-            else
-                log_error "Script di setup 4G non trovato"
-                # Aspetta l'intervallo specificato prima del prossimo controllo
-                sleep $interval
-                continue
-            fi
-            
-            # Aspetta 5 minuti e controlla di nuovo la connessione
-            sleep 300
-            if ! check_connection; then
-                # Ricontrolla se il modulo 4G è ancora funzionante prima di riavviare
-                if check_4g_module; then
-                    log_error "Connessione ancora assente dopo aver eseguito lo script, riavvio la macchina"
-                    sudo reboot
-                else
-                    log_error "Connessione ancora assente e modulo 4G non funzionante - evito riavvio"
-                    has_4g_module=false
-                    no_connection_time=0
-                fi
-            else
-                log_error "Connessione ripristinata dopo aver eseguito lo script"
-                no_connection_time=0
-            fi
-        fi
-    fi
+            sleep "$interval"
+        done
 
-    # Aspetta l'intervallo specificato prima del prossimo controllo
-    sleep $interval
+        log "Connection is down. Trying to set another provider..."
+        # Prova a switchare il provider ogni 5 tentativi falliti
+        provider=$(</home/lzer0/var/provider.config)
+        case "$provider" in
+            "vodafone")
+                echo "tim" > /home/lzer0/var/provider.config
+                ;;
+            "tim")
+                echo "vodafone" > /home/lzer0/var/provider.config
+                ;;
+            *)
+                log "No provider found, set vodafone as default."
+                echo "vodafone" > /home/lzer0/var/provider.config
+                ;;
+        esac
+    	"$start_connection"
+    fi
+    
+    sleep "$interval"
 done

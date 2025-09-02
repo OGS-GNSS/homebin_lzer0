@@ -1,44 +1,36 @@
 #!/bin/bash
-# Creato da Simone Galvi (Giugno 2024)
+# Created by S. Galvi (June 2024 - Edit Sept 2025)
 
 # Definizione del file di log
 LOG_FILE="/home/lzer0/log/lzer0.start.4Gnet.log"
+mkdir -p "$(dirname "$LOG_FILE")"
 
 # Funzione per il logging
 log() {
     local message="$1"
     local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
     echo "[$timestamp] $message" | tee -a "$LOG_FILE"
-    echo "$message" 
+    echo "$message"
 }
 
 # Verifica che lo script sia eseguito con sudo
 if [ "$EUID" -ne 0 ]; then
-    log "Errore: Questo script deve essere eseguito con sudo"
-    echo "Errore: Questo script deve essere eseguito con sudo"
+    log "Error: This script must be run with sudo"
     exit 1
 fi
 
-# Assicurati che la directory di log esista
-if [ ! -d "$(dirname "$LOG_FILE")" ]; then
-    mkdir -p "$(dirname "$LOG_FILE")"
-    log "Cartella $(dirname "$LOG_FILE") creata."
-fi
-log "Script 4G avviato"
+log "Script started"
 
 # Leggi il contenuto del file provider.config
 provider=$(</home/lzer0/var/provider.config)
 
 tim_start() {
     log "tim configuration starting..."
+    # stopping modem manager
     sudo systemctl unmask ModemManager.service
     sudo systemctl disable ModemManager.service
     sudo systemctl stop ModemManager.service
-    sudo ip link set wwan0 down
-    echo 'Y' | sudo tee /sys/class/net/wwan0/qmi/raw_ip
-    sudo ip link set wwan0 up
-    sudo qmicli -p -d /dev/cdc-wdm0 --device-open-net='net-raw-ip|net-no-qos-header' --wds-start-network="apn='ibox.tim.it',ip-type=4" --client-no-release-cid
-
+    
     sudo ip link set wwan0 down
     sudo ip link set wwan0 up
     sudo qmicli -p -d /dev/cdc-wdm0 --device-open-net='net-raw-ip|net-no-qos-header' --wds-start-network="apn='ibox.tim.it',ip-type=4" --client-no-release-cid
@@ -47,8 +39,9 @@ tim_start() {
 }
 vodafone_start() {
     log "vodafone configuration starting..."
-    sleep 30
+    # stopping modem manager
     sudo systemctl kill ModemManager.service
+
     sudo ip link set wwan0 down
     echo 'Y' | sudo tee /sys/class/net/wwan0/qmi/raw_ip
     sudo ip link set wwan0 up
@@ -59,16 +52,7 @@ vodafone_start() {
     sudo nohup udhcpc -i wwan0 &
     sleep 10
 }
-check_connection() {
-    ping -c 1 8.8.8.8 &> /dev/null
-    if [ $? -eq 0 ]; then
-        log "Connessione attiva"
-	return 0
-        else
-        log "Connessione non attiva"
-	return 1
-    fi
-}
+
 start_provider() {
     local provider="$1"
     if [[ $provider == "tim" ]]; then
@@ -77,6 +61,7 @@ start_provider() {
         vodafone_start
     fi
 }
+
 if [ ! -d "/home/lzer0/var/" ]; then
     mkdir -p /home/lzer0/var/
     log "Cartella /home/lzer0/var/ creata."
@@ -85,28 +70,22 @@ if [ ! -f "/home/lzer0/var/provider.config" ]; then
     touch /home/lzer0/var/provider.config
     log "File /home/lzer0/var/provider.config creato."
 fi
-while true; do
-    if [[ $provider == "tim" ]]; then
-        start_provider "tim"
-    elif [[ $provider == "vodafone" ]]; then
-        start_provider "vodafone"
-    else
-        log "Provo con configurazione vodafone"
-        provider="vodafone"
-        start_provider "$provider"
-    fi
 
-    log "Tentativo di connessione..."
-    if check_connection; then
-        log "Connessione stabilita"
-        echo "$provider" > /home/lzer0/var/provider.config
-        break
-    else
-        log "Connessione fallita, provando l'altra configurazione..."
-        if [[ $provider == "tim" ]]; then
-            provider="vodafone"
-        else
-            provider="tim"
-        fi
-    fi
-done
+
+if [[ $provider == "tim" ]]; then
+    start_provider "tim"
+elif [[ $provider == "vodafone" ]]; then
+    start_provider "vodafone"
+else
+    log "trying with the provider Vodafone"
+    provider="vodafone"
+    start_provider "$provider"
+fi
+
+ping -c 1 8.8.8.8 &> /dev/null
+if [ $? -eq 0 ]; then
+    log "Internet connection Ok"
+else
+    log "No internet connection"
+fi
+
