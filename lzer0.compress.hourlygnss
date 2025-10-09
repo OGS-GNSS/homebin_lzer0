@@ -89,7 +89,7 @@ set site = `echo $SITE | tr 'A-Z' 'a-z'`
 set YR   = `echo $YEAR | awk '{ print substr($1,3,2) }'`
 if ($PHOURS == "") then
 	set ses  = `echo $SES | tr 'A-Z' 'a-z'`
-        foreach ic( '' 'U' )
+        foreach ic( '' 'U' 'R' )
 		set RAW = ${DUMPDIR}/${YEAR}/${DOY}/${ses}/${ic}${SITE}${ses}$YR.$DOY
 		if (-e $RAW ) then
 			if ( ! -e ${RAW}.bz2 ) then
