@@ -116,7 +116,7 @@ PATH=/home/lzer0/bin:/usr/local/bin:/usr/bin:/bin
 ### Gestione dei dataset GNSS
 0 * * * * sleep 5; /home/lzer0/bin/lzer0.compress.hourlygnssall -f /home/lzer0/cfg/sites.cfg >/dev/null 2>&1
 30 */6 * * * /home/lzer0/bin/lzer0.compress.hourlygnssall -f /home/lzer0/cfg/sites.cfg -p 96 >/dev/null 2>&1
-0 2 * * * /home/lzer0/bin/cleanup_old_gnss.sh 10 >/dev/null 2>&1
+0 2 * * * /home/lzer0/bin/lzer0.cleanup.oldgnss 15 >/dev/null 2>&1
 
 ### Elaborazione in tempo reale dei dati GNSS
 @reboot sleep 45; /home/lzer0/bin/lzer0.start.rtk -f /home/lzer0/cfg/rtkrcv.curr.conf >/dev/null 2>&1
