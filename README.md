@@ -114,8 +114,8 @@ PATH=/home/lzer0/bin:/usr/local/bin:/usr/bin:/bin
 */10 * * * * /home/lzer0/bin/lzer0.manage.serialport check
 
 ### Gestione dei dataset GNSS
-0 * * * * sleep 5; /home/lzer0/bin/lzer0.compress.hourlygnss -f /home/lzer0/cfg/sites.cfg >/dev/null 2>&1
-30 */6 * * * /home/lzer0/bin/lzer0.compress.hourlygnss -f /home/lzer0/cfg/sites.cfg -p 96 >/dev/null 2>&1
+0 * * * * sleep 5; /home/lzer0/bin/lzer0.compress.hourlygnssall -f /home/lzer0/cfg/sites.cfg >/dev/null 2>&1
+30 */6 * * * /home/lzer0/bin/lzer0.compress.hourlygnssall -f /home/lzer0/cfg/sites.cfg -p 96 >/dev/null 2>&1
 
 ### Elaborazione in tempo reale dei dati GNSS
 @reboot sleep 45; /home/lzer0/bin/lzer0.start.rtk -f /home/lzer0/cfg/rtkrcv.curr.conf >/dev/null 2>&1
