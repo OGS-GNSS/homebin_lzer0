@@ -1,0 +1,125 @@
+#!/bin/bash
+#
+# Script to clean up old GNSS data
+# Keeps files newer than N days, deletes older ones
+#
+# Usage: cleanup_old_gnss.sh [DAYS]
+# Example: cleanup_old_gnss.sh 10
+
+# Default values
+STORAGE="/mnt/hd"
+GNSS_DIR="${STORAGE}/gnss"
+LOGDIR="/home/${USER}/log"
+LOGFILE="${LOGDIR}/cleanup_old_gnss.log"
+DEVICE="/dev/sda1"
+
+# Check if argument is provided
+if [ $# -eq 0 ]; then
+    echo "Usage: $(basename $0) [DAYS]"
+    echo "  [DAYS]: Number of days to keep"
+    echo ""
+    echo "Example: $(basename $0) 10"
+    echo "  This will keep files from the last 10 days and delete older ones"
+    exit 1
+fi
+
+DAYS_TO_KEEP=$1
+
+# Create log directory if it doesn't exist
+if [ ! -d "${LOGDIR}" ]; then
+    mkdir -p "${LOGDIR}"
+fi
+
+# Function to log messages
+log_message() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "${LOGFILE}"
+}
+
+log_message "=== Cleanup started - Keeping last ${DAYS_TO_KEEP} days ==="
+
+# Show disk space before cleanup
+SPACE_BEFORE=$(df -h ${DEVICE} | tail -1)
+log_message "Disk space before cleanup:"
+log_message "  ${SPACE_BEFORE}"
+
+# Check if GNSS directory exists
+if [ ! -d "${GNSS_DIR}" ]; then
+    log_message "ERROR: GNSS directory ${GNSS_DIR} does not exist"
+    exit 1
+fi
+
+# Calculate the cutoff date (N days ago)
+CUTOFF_DATE=$(date -d "${DAYS_TO_KEEP} days ago" +%s)
+
+# Count variables
+DIRS_DELETED=0
+FILES_DELETED=0
+SPACE_FREED=0
+
+# Loop through year directories
+for YEAR_DIR in ${GNSS_DIR}/[0-9][0-9][0-9][0-9]; do
+    if [ ! -d "${YEAR_DIR}" ]; then
+        continue
+    fi
+    
+    YEAR=$(basename "${YEAR_DIR}")
+    
+    # Loop through DOY directories
+    for DOY_DIR in ${YEAR_DIR}/[0-9][0-9][0-9]; do
+        if [ ! -d "${DOY_DIR}" ]; then
+            continue
+        fi
+        
+        DOY=$(basename "${DOY_DIR}")
+        
+        # Convert YEAR/DOY to timestamp
+        DIR_DATE=$(date -d "${YEAR}-01-01 +$((${DOY} - 1)) days" +%s 2>/dev/null)
+        
+        # Check if conversion was successful
+        if [ $? -ne 0 ]; then
+            log_message "WARNING: Could not parse date for ${YEAR}/${DOY}"
+            continue
+        fi
+        
+        # Compare with cutoff date
+        if [ ${DIR_DATE} -lt ${CUTOFF_DATE} ]; then
+            # Calculate space before deletion
+            DIR_SIZE=$(du -sb "${DOY_DIR}" 2>/dev/null | awk '{print $1}')
+            
+            # Count files in directory
+            FILE_COUNT=$(find "${DOY_DIR}" -type f 2>/dev/null | wc -l)
+            
+            # Delete the directory
+            log_message "Deleting old directory: ${YEAR}/${DOY} (${FILE_COUNT} files, $(numfmt --to=iec ${DIR_SIZE} 2>/dev/null || echo ${DIR_SIZE}) bytes)"
+            rm -rf "${DOY_DIR}"
+            
+            if [ $? -eq 0 ]; then
+                DIRS_DELETED=$((DIRS_DELETED + 1))
+                FILES_DELETED=$((FILES_DELETED + FILE_COUNT))
+                SPACE_FREED=$((SPACE_FREED + DIR_SIZE))
+            else
+                log_message "ERROR: Failed to delete ${DOY_DIR}"
+            fi
+        fi
+    done
+    
+    # Check if year directory is empty and remove it
+    if [ -d "${YEAR_DIR}" ] && [ -z "$(ls -A ${YEAR_DIR})" ]; then
+        log_message "Removing empty year directory: ${YEAR}"
+        rmdir "${YEAR_DIR}"
+    fi
+done
+
+# Log summary
+log_message "=== Cleanup completed ==="
+log_message "Directories deleted: ${DIRS_DELETED}"
+log_message "Files deleted: ${FILES_DELETED}"
+log_message "Space freed: $(numfmt --to=iec ${SPACE_FREED} 2>/dev/null || echo ${SPACE_FREED}) bytes"
+
+# Show disk space after cleanup
+SPACE_AFTER=$(df -h ${DEVICE} | tail -1)
+log_message "Disk space after cleanup:"
+log_message "  ${SPACE_AFTER}"
+log_message ""
+
+exit 0
