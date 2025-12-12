@@ -9,10 +9,6 @@ def fix_coordinate_format(coord_str):
     """
     Corregge il formato delle coordinate che potrebbero avere punti extra.
     Le coordinate GPS/GNSS hanno tipicamente 8 cifre decimali.
-    Esempi:
-    - '13.12.59156604' diventa '13.1259156604'
-    - '46.14267121' rimane '46.14267121'
-    - '13.1.234567890' diventa '13.1234567890' (troncato a 8 decimali)
     """
     coord_str = coord_str.strip()
     
@@ -20,12 +16,9 @@ def fix_coordinate_format(coord_str):
     if coord_str.count('.') > 1:
         parts = coord_str.split('.')
         if len(parts) > 2:
-            # Parte intera
             integer_part = parts[0]
-            # Parte decimale: concatena tutto il resto
             decimal_part = ''.join(parts[1:])
             
-            # Limita a 8 cifre decimali per le coordinate GPS
             if len(decimal_part) > 8:
                 decimal_part = decimal_part[:8]
                 print(f"Parte decimale troncata a 8 cifre: {decimal_part}")
@@ -34,7 +27,6 @@ def fix_coordinate_format(coord_str):
             print(f"Coordinata corretta: '{coord_str}' -> '{fixed}'")
             return fixed
     else:
-        # Controlla se ha troppe cifre decimali
         if '.' in coord_str:
             parts = coord_str.split('.')
             if len(parts[1]) > 8:
@@ -52,7 +44,16 @@ def parse_sites_cfg(file_path):
                 key, value = line.split(":", 1)
                 key = key.strip().lower().replace(" ", "_")
                 value = value.strip()
+                
                 if "coordinates" in key:
+                    # --- MODIFICA INIZIO ---
+                    # Controllo se il valore è vuoto prima di provare a convertirlo
+                    if not value:
+                        print(f"WARNING: Nessuna coordinata trovata per '{key}'. Essendo facoltative, procedo senza bloccare.")
+                        variables[key] = None
+                        continue
+                    # --- MODIFICA FINE ---
+
                     try:
                         # Prova a convertire normalmente
                         value = list(map(float, value.split(",")))
@@ -66,16 +67,20 @@ def parse_sites_cfg(file_path):
                         
                         for coord in coord_parts:
                             coord = coord.strip()
+                            # Se una delle parti è vuota dopo lo split, saltala o gestiscila
+                            if not coord:
+                                continue
+                                
                             fixed_coord = fix_coordinate_format(coord)
                             try:
                                 corrected_coords.append(float(fixed_coord))
                             except ValueError:
                                 print(f"Impossibile correggere la coordinata: '{coord}'")
-                                # Usa un valore di default o solleva un errore
                                 raise ValueError(f"Coordinata non valida dopo la correzione: '{coord}'")
                         
                         value = corrected_coords
                         print(f"Coordinate corrette: {value}")
+                
                 variables[key] = value
     return variables
 
@@ -87,21 +92,27 @@ def update_rtkrcv_config(file_path, data):
     print(f"Creato backup in: {backup_path}")
     
     # Genera i nuovi valori basati sui dati letti da sites.cfg
-    rover_name = data["rover_name"]
-    master_name = data["master_name"]
-    master_coordinates = data.get("master_coordinates", [None, None, None])
-    mcaster_ip = data["mcaster_ip"]
-    mcaster_port = data["mcaster_port"]
-    mcaster_mountpoint = data["mcaster_mountpoint"]
-    mcaster_user = data["mcaster_user"]
-    mcaster_password = data["mcaster_password"]
-    mcaster_stream = data["mcaster_stream"]
-    pcaster_ip = data["pcaster_ip"]
-    pcaster_port = data["pcaster_port"]
-    pcaster_mountpoint = data["pcaster_mountpoint"]
-    pcaster_user = data["pcaster_user"]
-    pcaster_password = data["pcaster_password"]
-    pcaster_stream = data["pcaster_stream"]
+    rover_name = data.get("rover_name", "UNKNOWN")
+    master_name = data.get("master_name", "UNKNOWN")
+    
+    # Gestione sicura di master_coordinates nel caso siano None o mancanti
+    master_coordinates = data.get("master_coordinates")
+    if not master_coordinates:
+        master_coordinates = [None, None, None]
+        print(f"WARNING: Master coordinates non trovate o non valide. Usati valori placeholder.")
+
+    mcaster_ip = data.get("mcaster_ip", "")
+    mcaster_port = data.get("mcaster_port", "")
+    mcaster_mountpoint = data.get("mcaster_mountpoint", "")
+    mcaster_user = data.get("mcaster_user", "")
+    mcaster_password = data.get("mcaster_password", "")
+    mcaster_stream = data.get("mcaster_stream", "")
+    pcaster_ip = data.get("pcaster_ip", "")
+    pcaster_port = data.get("pcaster_port", "")
+    pcaster_mountpoint = data.get("pcaster_mountpoint", "")
+    pcaster_user = data.get("pcaster_user", "")
+    pcaster_password = data.get("pcaster_password", "")
+    pcaster_stream = data.get("pcaster_stream", "")
     
     new_values = {
         "logstr1-path": f"/mnt/hd/gnss/%Y/%n/%H/U{rover_name}%H%y.%n::S=1::T",
@@ -115,20 +126,16 @@ def update_rtkrcv_config(file_path, data):
         "inpstr3-format": f"{pcaster_stream}      # (0:rtcm2,1:rtcm3,2:oem4,3:oem3,4:ubx,5:ss2,6:hemis,7:skytraq,8:gw10,9:javad,10:nvs,11:binex,12:rt17,15:sp3)"
     }
     
-    # Leggi il file di configurazione esistente
     updated_lines = []
     with open(file_path, "r") as file:
         for line in file:
-            key = line.split("=")[0].strip()  # Estrai la chiave dalla riga
+            key = line.split("=")[0].strip()
             if key in new_values:
-                # Sostituisci la riga con il nuovo valore
                 updated_lines.append(f"{key}={new_values[key]}\n")
                 print(f"sostituita riga {key}={new_values[key]}")
             else:
-                # Mantieni la riga originale
                 updated_lines.append(line)
     
-    # Scrivi le righe aggiornate nel file
     with open(file_path, "w") as file:
         file.writelines(updated_lines)
 
@@ -139,13 +146,6 @@ def restart_services():
         print("Avvio del comando tcp2file...")
         subprocess.run(tcp2file_command, shell=True, check=True)
         print("Comando tcp2file completato con successo.")
-        
-        # Esegui il secondo comando
-        # *** al momento tengo commentato questo comando. fa perdere un sacco di tempo all'operazione di riavvio dei servizi quindi se non e' necessario non lo eseguirei ***
-        #compress_command = "/home/lzer0/bin/lzer0.compress.hourlygnssall -f /home/lzer0/cfg/sites.cfg -p 96 >> /home/lzer0/log/lzer0.compress.hourlygnss.log 2>&1"
-        #print("Avvio del comando compress...")
-        #subprocess.run(compress_command, shell=True, check=True)
-        #print("Comando compress completato con successo.")
         
         # Cerca e uccidi il processo contenente le keyword "rtkrcv" e "2950"
         kill_process_command = "ps -ef | grep 'rtkrcv' | grep '2950' | gawk '{print $2}'"
@@ -160,7 +160,7 @@ def restart_services():
                 except ProcessLookupError:
                     print(f"Il processo con PID {pid} non esiste più.")
             else:
-                print(f"PID non valido: '{pid}'")
+                pass # PID vuoto o non valido
         
         # Avvia il nuovo processo
         start_rtk_command = "/home/lzer0/bin/lzer0.start.rtk -f /home/lzer0/cfg/rtkrcv.curr.conf >> /home/lzer0/log/lzer0.start.rtk.log 2>&1"
@@ -180,7 +180,7 @@ def restart_services():
                 except ProcessLookupError:
                     print(f"Il processo con PID {pid} non esiste piu.")
             else:
-                print(f"PID non valido: '{pid}'")
+                pass # PID vuoto o non valido
         
         # Avvia il nuovo processo
         start_str2str_command = "/home/lzer0/bin/lzer0.record.hourlypos -f /home/lzer0/cfg/sites.cfg >> /home/lzer0/log/lzer0.record.hourlypos.log 2>&1"
