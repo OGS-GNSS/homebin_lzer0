@@ -1,9 +1,12 @@
 #!/bin/bash
 # Created by S. Galvi (Last modified: Sept 2025)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lzer0.config.sh"
 
-start_connection="/home/lzer0/bin/lzer0.start.4GNet"
+start_connection="${LZERO_BIN_DIR}/lzer0.start.4GNet"
 interval=30  # seconds
-log_file="/home/lzer0/log/lzer0.check.connection.log"
+log_file="${LZERO_LOG_DIR}/lzer0.check.connection.log"
+provider_config="${LZERO_VAR_DIR}/provider.config"
 mkdir -p "$(dirname "$log_file")"
 
 # Funzione per il logging
@@ -63,17 +66,17 @@ while true; do
 
         log "Connection is down. Trying to set another provider..."
         # Prova a switchare il provider ogni 5 tentativi falliti
-        provider=$(</home/lzer0/var/provider.config)
+        provider=$(<"$provider_config")
         case "$provider" in
             "vodafone")
-                echo "tim" > /home/lzer0/var/provider.config
+                echo "tim" > "$provider_config"
                 ;;
             "tim")
-                echo "vodafone" > /home/lzer0/var/provider.config
+                echo "vodafone" > "$provider_config"
                 ;;
             *)
                 log "No provider found, set vodafone as default."
-                echo "vodafone" > /home/lzer0/var/provider.config
+                echo "vodafone" > "$provider_config"
                 ;;
         esac
     	"$start_connection"

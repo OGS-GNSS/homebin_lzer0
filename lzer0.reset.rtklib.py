@@ -22,14 +22,17 @@ import signal
 from datetime import datetime
 from dataclasses import dataclass
 from typing import Optional
+from lzer0_config import load_config
+
+LZERO_CONFIG = load_config(__file__)
 
 # Configurazione
 @dataclass
 class Config:
     HOST: str = '127.0.0.1'
-    PORT: int = 5754
-    LOG_DIR: str = "/home/lzer0/log"
-    PIDFILE: str = "/home/lzer0/log/lzer0.resetrtklib.pid"
+    PORT: int = int(LZERO_CONFIG["LZERO_POS_TCP_PORT"])
+    LOG_DIR: str = LZERO_CONFIG["LZERO_LOG_DIR"]
+    PIDFILE: str = f"{LZERO_CONFIG['LZERO_LOG_DIR']}/lzer0.resetrtklib.pid"
     CHECK_INTERVAL: int = 60
     CONNECTION_RETRY_ATTEMPTS: int = 5
     STATUS_RETRY_INTERVAL: int = 40

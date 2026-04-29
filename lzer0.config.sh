@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Shared configuration loader for lzer0 Bash scripts.
+
+_lzero_script_source="${BASH_SOURCE[1]:-${BASH_SOURCE[0]}}"
+_lzero_script_dir="$(cd "$(dirname "$_lzero_script_source")" && pwd)"
+_lzero_env_file="${LZERO_ENV_FILE:-${HOME}/cfg/lzer0.env}"
+
+if [[ -f "$_lzero_env_file" ]]; then
+    source "$_lzero_env_file"
+elif [[ -f "${_lzero_script_dir}/lzer0.env" ]]; then
+    source "${_lzero_script_dir}/lzer0.env"
+fi
+
+: "${LZERO_HOME:=/home/lzer0}"
+: "${LZERO_BIN_DIR:=${LZERO_HOME}/bin}"
+: "${LZERO_CONFIG_DIR:=${LZERO_HOME}/cfg}"
+: "${LZERO_LOG_DIR:=${LZERO_HOME}/log}"
+: "${LZERO_VAR_DIR:=${LZERO_HOME}/var}"
+: "${LZERO_TMP_DIR:=${LZERO_HOME}/tmp/tmp.lzer0}"
+: "${LZERO_STORAGE_MOUNT:=/mnt/hd}"
+: "${LZERO_GNSS_DIR:=${LZERO_STORAGE_MOUNT}/gnss}"
+
+: "${LZERO_SITE_CONFIG:=${LZERO_CONFIG_DIR}/sites.cfg}"
+: "${LZERO_RTKRCV_CONFIG:=${LZERO_CONFIG_DIR}/rtkrcv.curr.conf}"
+: "${LZERO_RNX2RTKP_CONFIG:=${LZERO_CONFIG_DIR}/rnx2rtkp.curr.conf}"
+: "${LZERO_STATION_POS_FILE:=${LZERO_HOME}/tab/station.pos}"
+
+: "${LZERO_RTKRCV_TELNET_PORT:=2950}"
+: "${LZERO_RAW_TCP_PORT:=2222}"
+: "${LZERO_RTCM_TCP_PORT:=3333}"
+: "${LZERO_POS_TCP_PORT:=5754}"
+
+: "${LZERO_SERIAL_USB_DEVICE:=ttyACM0}"
+: "${LZERO_SERIAL_UART_DEVICE:=ttyS0}"
+
+: "${LZERO_STORAGE_USE_LIMIT:=90}"
+: "${LZERO_CLEANUP_MIN_FREE_GB:=15}"

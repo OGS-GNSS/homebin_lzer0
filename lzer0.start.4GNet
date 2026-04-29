@@ -1,8 +1,11 @@
 #!/bin/bash
 # Creato da Simone Galvi (Giugno 2024)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lzer0.config.sh"
 
 # Definizione del file di log
-LOG_FILE="/home/lzer0/log/lzer0.start.4Gnet.log"
+LOG_FILE="${LZERO_LOG_DIR}/lzer0.start.4Gnet.log"
+PROVIDER_CONFIG="${LZERO_VAR_DIR}/provider.config"
 
 # Funzione per il logging
 log() {
@@ -25,9 +28,6 @@ if [ ! -d "$(dirname "$LOG_FILE")" ]; then
     log "Cartella $(dirname "$LOG_FILE") creata."
 fi
 log "Script 4G avviato"
-
-# Leggi il contenuto del file provider.config
-provider=$(</home/lzer0/var/provider.config)
 
 tim_start() {
     log "tim configuration starting..."
@@ -77,14 +77,17 @@ start_provider() {
         vodafone_start
     fi
 }
-if [ ! -d "/home/lzer0/var/" ]; then
-    mkdir -p /home/lzer0/var/
-    log "Cartella /home/lzer0/var/ creata."
+if [ ! -d "$LZERO_VAR_DIR" ]; then
+    mkdir -p "$LZERO_VAR_DIR"
+    log "Cartella $LZERO_VAR_DIR creata."
 fi
-if [ ! -f "/home/lzer0/var/provider.config" ]; then
-    touch /home/lzer0/var/provider.config
-    log "File /home/lzer0/var/provider.config creato."
+if [ ! -f "$PROVIDER_CONFIG" ]; then
+    touch "$PROVIDER_CONFIG"
+    log "File $PROVIDER_CONFIG creato."
 fi
+
+# Leggi il contenuto del file provider.config
+provider=$(<"$PROVIDER_CONFIG")
 while true; do
     if [[ $provider == "tim" ]]; then
         start_provider "tim"
@@ -99,7 +102,7 @@ while true; do
     log "Tentativo di connessione..."
     if check_connection; then
         log "Connessione stabilita"
-        echo "$provider" > /home/lzer0/var/provider.config
+        echo "$provider" > "$PROVIDER_CONFIG"
         break
     else
         log "Connessione fallita, provando l'altra configurazione..."

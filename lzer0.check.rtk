@@ -1,74 +1,78 @@
-#!/bin/tcsh 
+#!/usr/bin/env bash
 # created  by DZ (Mar 2017)
 # modified by DZ (Aug 2022)
 # modified by sg (mar 25) - Added internal logging
 # modified - Improved logging system
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lzer0.config.sh"
 
 # Define script name
-set JOB = `basename $0`
+JOB="$(basename "$0")"
 
 # Define log directory and file
-set LOG_DIR = "$HOME/log"
-set LOG_FILE = "$LOG_DIR/lzer0.check.rtkrcv.log"
+LOG_DIR="$LZERO_LOG_DIR"
+LOG_FILE="$LOG_DIR/lzer0.check.rtkrcv.log"
 
 # Check if log directory exists, create it if not
-if (! -d "$LOG_DIR") then
+if [[ ! -d "$LOG_DIR" ]]; then
     mkdir -p "$LOG_DIR"
-endif
+fi
 
 # Function to log messages
-alias log_message 'echo `date "+%Y-%m-%d %H:%M:%S"` - \!* >> $LOG_FILE'
+log_message() {
+    echo "$(date "+%Y-%m-%d %H:%M:%S") - $*" >> "$LOG_FILE"
+}
 
 # If no arguments are passed it outputs script usage and logs it
-if (${%argv} == 0) then
+if [[ $# -eq 0 ]]; then
     log_message "No arguments provided. Showing usage."
     echo "- USAGE: $JOB -f [config file]"
     echo "    e.g: $JOB -f $HOME/cfg/rtkrcv.curr.conf"
     exit 1
-endif
+fi
 
 # Process command line params
-set cfgFile = ""
-while ($#)
-    switch($1)
-        case "-f":
+cfgFile=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        "-f")
             shift
-            if ($# > 0) then
-                set cfgFile = $1
+            if [[ $# -gt 0 ]]; then
+                cfgFile="$1"
             else
                 log_message "ERROR: No value provided for -f option"
                 echo "ERROR: No value provided for -f option"
                 exit 1
-            endif
-            breaksw
-        default:
-            breaksw
-    endsw
+            fi
+            ;;
+        *)
+            ;;
+    esac
     shift
-end
+done
 
 # Check if config file was provided
-if ("$cfgFile" == "") then
+if [[ "$cfgFile" == "" ]]; then
     log_message "ERROR: Config file not specified"
     echo "ERROR: Config file not specified"
     echo "- USAGE: $JOB -f [config file]"
     exit 1
-endif
+fi
 
 # Log start of checking process
 log_message "Starting check for rtkrcv service"
 
 # Define process variables
-set RUNNINGSCRIPT = rtkrcv
-set KEYWORD1 = 2950
-set KEYWORD2 = $cfgFile
+RUNNINGSCRIPT=rtkrcv
+KEYWORD1=${LZERO_RTKRCV_TELNET_PORT}
+KEYWORD2=$cfgFile
 
 # Check if process is running
-set RUNNINGSCRIPT_STATUS = `ps -ef | grep $RUNNINGSCRIPT | grep $KEYWORD1 | grep -v $JOB | grep -v grep | wc -l`
-set RUNNINGSCRIPT_PID = `ps -ef | grep $RUNNINGSCRIPT | grep $KEYWORD1 | grep -v $JOB | grep -v grep | awk '{print $2}'`
+RUNNINGSCRIPT_STATUS="$(ps -ef | grep "$RUNNINGSCRIPT" | grep "$KEYWORD1" | grep -v "$JOB" | grep -v grep | wc -l)"
+RUNNINGSCRIPT_PID="$(ps -ef | grep "$RUNNINGSCRIPT" | grep "$KEYWORD1" | grep -v "$JOB" | grep -v grep | awk '{print $2}')"
 
 # Check status and log result
-if ($RUNNINGSCRIPT_STATUS) then
+if (( RUNNINGSCRIPT_STATUS )); then
     log_message "$RUNNINGSCRIPT is running with PID $RUNNINGSCRIPT_PID"
     echo "$RUNNINGSCRIPT is running with PID $RUNNINGSCRIPT_PID"
 else
@@ -80,13 +84,13 @@ else
     $HOME/bin/lzer0.start.rtk -f $cfgFile
     
     # Check if start was successful
-    set START_STATUS = $status
-    if ($START_STATUS == 0) then
+    START_STATUS=$?
+    if [[ $START_STATUS -eq 0 ]]; then
         log_message "Successfully started $RUNNINGSCRIPT"
     else
         log_message "Failed to start $RUNNINGSCRIPT, exit code: $START_STATUS"
-    endif
-endif
+    fi
+fi
 
 # Log completion
 log_message "Check completed"

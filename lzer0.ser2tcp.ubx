@@ -1,17 +1,19 @@
-#!/bin/tcsh
+#!/usr/bin/env bash
 # created by DZ (Mar 2017)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lzer0.config.sh"
 #
 #********************  DEFAULTS ********************
-set JOB		= `basename $0`
-set CURDIR	= `pwd`
+JOB="$(basename "$0")"
+CURDIR="$(pwd)"
 
 #******************** START TO REDIRECT AND TRANSLATE STREAMS
 # ouput ublox raw stream to 2222 tcp port and translate into RTCM 3.1 to 3333 tcp port 
 #
 # flag to check if u-blox is USB or serial
-set isUbloxUSB = `dmesg | grep usb | grep u-blox | wc -l`
-if ($isUbloxUSB > 0) then
-	nohup /usr/local/bin/str2str -in serial://ttyACM0:115200:8:o:1:off'#'ubx -out tcpsvr://:2222 -out tcpsvr://:3333'#'rtcm3 -msg "1002(1),1010(1),1019(10),1020(20)" >& /dev/null &
+isUbloxUSB="$(dmesg | grep usb | grep u-blox | wc -l)"
+if (( isUbloxUSB > 0 )); then
+	nohup /usr/local/bin/str2str -in serial://${LZERO_SERIAL_USB_DEVICE}:115200:8:o:1:off'#'ubx -out tcpsvr://:${LZERO_RAW_TCP_PORT} -out tcpsvr://:${LZERO_RTCM_TCP_PORT}'#'rtcm3 -msg "1002(1),1010(1),1019(10),1020(20)" &> /dev/null &
 else
-	nohup /usr/local/bin/str2str -in serial://ttyS0:115200:8:o:1:off'#'ubx -out tcpsvr://:2222 -out tcpsvr://:3333'#'rtcm3 -msg "1002(1),1010(1),1019(10),1020(20)" >& /dev/null &
-endif
+	nohup /usr/local/bin/str2str -in serial://${LZERO_SERIAL_UART_DEVICE}:115200:8:o:1:off'#'ubx -out tcpsvr://:${LZERO_RAW_TCP_PORT} -out tcpsvr://:${LZERO_RTCM_TCP_PORT}'#'rtcm3 -msg "1002(1),1010(1),1019(10),1020(20)" &> /dev/null &
+fi

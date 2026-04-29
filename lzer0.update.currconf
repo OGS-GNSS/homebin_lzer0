@@ -4,6 +4,9 @@ import shutil
 import subprocess
 import signal
 import re
+from lzer0_config import load_config
+
+CONFIG = load_config(__file__)
 
 def fix_coordinate_format(coord_str):
     """
@@ -115,8 +118,8 @@ def update_rtkrcv_config(file_path, data):
     pcaster_stream = data.get("pcaster_stream", "")
     
     new_values = {
-        "logstr1-path": f"/mnt/hd/gnss/%Y/%n/%H/U{rover_name}%H%y.%n::S=1::T",
-        "logstr2-path": f"/mnt/hd/gnss/%Y/%n/%H/R{master_name}%H%y.%n::S=1::T",
+        "logstr1-path": f"{CONFIG['LZERO_GNSS_DIR']}/%Y/%n/%H/U{rover_name}%H%y.%n::S=1::T",
+        "logstr2-path": f"{CONFIG['LZERO_GNSS_DIR']}/%Y/%n/%H/R{master_name}%H%y.%n::S=1::T",
         "ant2-pos1": f"{master_coordinates[0]}           # (deg|m) {master_name} LAT",
         "ant2-pos2": f"{master_coordinates[1]}           # (deg|m) {master_name} LON",
         "ant2-pos3": f"{master_coordinates[2]}               # (m|m) {master_name} H",
@@ -142,13 +145,16 @@ def update_rtkrcv_config(file_path, data):
 def restart_services():
     try:
         # Esegui il primo comando
-        tcp2file_command = "/home/lzer0/bin/lzer0.tcp2file.ubx -f /home/lzer0/cfg/sites.cfg >> /home/lzer0/log/lzer0.tcp2file.ubx.log 2>&1"
+        tcp2file_command = (
+            f"{CONFIG['LZERO_BIN_DIR']}/lzer0.tcp2file.ubx -f {CONFIG['LZERO_SITE_CONFIG']} "
+            f">> {CONFIG['LZERO_LOG_DIR']}/lzer0.tcp2file.ubx.log 2>&1"
+        )
         print("Avvio del comando tcp2file...")
         subprocess.run(tcp2file_command, shell=True, check=True)
         print("Comando tcp2file completato con successo.")
         
-        # Cerca e uccidi il processo contenente le keyword "rtkrcv" e "2950"
-        kill_process_command = "ps -ef | grep 'rtkrcv' | grep '2950' | gawk '{print $2}'"
+        # Cerca e uccidi il processo contenente le keyword "rtkrcv" e la porta telnet configurata
+        kill_process_command = f"ps -ef | grep 'rtkrcv' | grep '{CONFIG['LZERO_RTKRCV_TELNET_PORT']}' | gawk '{{print $2}}'"
         rtk_process_ids = subprocess.check_output(kill_process_command, shell=True, text=True).strip().split("\n")
         for pid in rtk_process_ids:
             pid = pid.strip()
@@ -163,12 +169,15 @@ def restart_services():
                 pass # PID vuoto o non valido
         
         # Avvia il nuovo processo
-        start_rtk_command = "/home/lzer0/bin/lzer0.start.rtk -f /home/lzer0/cfg/rtkrcv.curr.conf >> /home/lzer0/log/lzer0.start.rtk.log 2>&1"
+        start_rtk_command = (
+            f"{CONFIG['LZERO_BIN_DIR']}/lzer0.start.rtk -f {CONFIG['LZERO_RTKRCV_CONFIG']} "
+            f">> {CONFIG['LZERO_LOG_DIR']}/lzer0.start.rtk.log 2>&1"
+        )
         print(f"Esecuzione del comando: {start_rtk_command}")
         subprocess.run(start_rtk_command, shell=True, check=True)
         
-        # Cerca e uccidi il processo contenente le keyword "str2str" e "5754"
-        kill_process_command = "ps -ef | grep 'str2str' | grep '5754' | gawk '{print $2}'"
+        # Cerca e uccidi il processo contenente le keyword "str2str" e la porta POS configurata
+        kill_process_command = f"ps -ef | grep 'str2str' | grep '{CONFIG['LZERO_POS_TCP_PORT']}' | gawk '{{print $2}}'"
         str2str_process_ids = subprocess.check_output(kill_process_command, shell=True, text=True).strip().split("\n")
         for pid in str2str_process_ids:
             pid = pid.strip()
@@ -183,7 +192,10 @@ def restart_services():
                 pass # PID vuoto o non valido
         
         # Avvia il nuovo processo
-        start_str2str_command = "/home/lzer0/bin/lzer0.record.hourlypos -f /home/lzer0/cfg/sites.cfg >> /home/lzer0/log/lzer0.record.hourlypos.log 2>&1"
+        start_str2str_command = (
+            f"{CONFIG['LZERO_BIN_DIR']}/lzer0.record.hourlypos -f {CONFIG['LZERO_SITE_CONFIG']} "
+            f">> {CONFIG['LZERO_LOG_DIR']}/lzer0.record.hourlypos.log 2>&1"
+        )
         print(f"Esecuzione del comando: {start_str2str_command}")
         subprocess.run(start_str2str_command, shell=True, check=True)
         
@@ -192,8 +204,8 @@ def restart_services():
         print(f"Errore durante l'esecuzione dei comandi post-update: {e}")
 
 # Esempio di utilizzo
-sites_cfg_file = "/home/lzer0/cfg/sites.cfg"
-rtkrcv_conf_file = "/home/lzer0/cfg/rtkrcv.curr.conf"
+sites_cfg_file = CONFIG["LZERO_SITE_CONFIG"]
+rtkrcv_conf_file = CONFIG["LZERO_RTKRCV_CONFIG"]
 
 # Verifica l'esistenza dei file
 if not os.path.exists(sites_cfg_file):

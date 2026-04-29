@@ -1,9 +1,11 @@
 #!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lzer0.config.sh"
 
-MOUNT_POINT="/mnt/hd"
-LOG_DIR="/home/lzer0/log"
+MOUNT_POINT="${LZERO_STORAGE_MOUNT}"
+LOG_DIR="${LZERO_LOG_DIR}"
 LOG_FILE="$LOG_DIR/usb-mount.log"
-USER="lzer0"
+USER="$(basename "$LZERO_HOME")"
 LOCK_FILE="/tmp/usb-automount.lock"
 
 fs_mount() {

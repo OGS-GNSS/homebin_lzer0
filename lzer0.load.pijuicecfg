@@ -1,2 +1,5 @@
 #!/bin/bash
-python3 /home/lzer0/bin/pijuice_util.py --load < /home/lzer0/cfg/pijuice/pijuice_settings.json
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lzer0.config.sh"
+
+python3 "${LZERO_BIN_DIR}/pijuice_util.py" --load < "${LZERO_CONFIG_DIR}/pijuice/pijuice_settings.json"

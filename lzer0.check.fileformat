@@ -1,56 +1,58 @@
-#!/bin/tcsh
+#!/usr/bin/env bash
 #
 # Script to discover the GNSS file format (ubx, rtcm, etc).
 # created  by DZ (Apr 2019)
 # modified by DZ (Aug 2022)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lzer0.config.sh"
 #
 #********************  DEFAULTS ********************
-set JOB		= `basename $0`
-set CURDIR	= `pwd`
-set TMPDIR      = ${HOME}/tmp/tmp.${JOB}
-set JOB_MON 	= convbin
-set KEYWORD 	= test.o
-set formats 	= (ubx rtcm3 rtcm2 nvs rinex nov oem3 ss2 hemis stq javad binex)
+JOB="$(basename "$0")"
+CURDIR="$(pwd)"
+TMPDIR="${LZERO_TMP_DIR}/tmp.${JOB}"
+JOB_MON=convbin
+KEYWORD=test.o
+formats=(ubx rtcm3 rtcm2 nvs rinex nov oem3 ss2 hemis stq javad binex)
 #********************  TUNING VARIABLES END  ********************
 #
 # check command line params. First one is used to set the site name, second one for brand
-while($#)
-        switch($1)
-                case "-f":
+while [[ $# -gt 0 ]]; do
+        case "$1" in
+                "-f")
                         #raw File name
                         shift
-                        set rawFile = $1
-                        breaksw
-                default:
+                        rawFile="$1"
+                        ;;
+                *)
                         shift
-                        breaksw
-        endsw
+                        ;;
+        esac
         shift
-end
-if ( $?rawFile ) then
-	if ( ! -e $rawFile) then
+done
+if [[ -n "${rawFile+x}" ]]; then
+	if [[ ! -e "$rawFile" ]]; then
 		echo "USAGE: $JOB -f [file to check]"
 		exit
 	else
-		mkdir -p $TMPDIR
-		rm -fR $TMPDIR/* >& /dev/null
-	endif
+		mkdir -p "$TMPDIR"
+		rm -fR "$TMPDIR"/* &> /dev/null
+	fi
 else
 	echo "USAGE: $JOB -f [file to check]"
 	exit
-endif
-foreach format ($formats)
-	($JOB_MON -r $format $rawFile -o ${TMPDIR}/${KEYWORD} > /dev/null &) >& /dev/null
+fi
+for format in "${formats[@]}"; do
+	("$JOB_MON" -r "$format" "$rawFile" -o "${TMPDIR}/${KEYWORD}" > /dev/null &) &> /dev/null
 	sleep 8 #needed for bug files (e.g 20MB of raw data)
-	set PidsMonJob = `ps -ef | grep $KEYWORD | gawk -v JOB_MON=${JOB_MON} '{if ($8==JOB_MON) {print $2}}'`
-	foreach PidMonJob ($PidsMonJob)
-        	(kill_family ${PidMonJob} > /dev/null) >& /dev/null
-	end
-	if ( -e ${TMPDIR}/$KEYWORD) then
-		if ( ! -z ${TMPDIR}/$KEYWORD) then
+	PidsMonJob="$(ps -ef | grep "$KEYWORD" | gawk -v JOB_MON="${JOB_MON}" '{if ($8==JOB_MON) {print $2}}')"
+	for PidMonJob in $PidsMonJob; do
+		(kill_family "${PidMonJob}" > /dev/null) &> /dev/null
+	done
+	if [[ -e "${TMPDIR}/$KEYWORD" ]]; then
+		if [[ -s "${TMPDIR}/$KEYWORD" ]]; then
    			echo "$format"
-			rm -fR  ${TMPDIR}
+			rm -fR  "${TMPDIR}"
 			exit
-		endif
-	endif
-end
+		fi
+	fi
+done

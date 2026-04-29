@@ -1,67 +1,71 @@
-#!/bin/tcsh -f
+#!/usr/bin/env bash
 # created  by DZ (Feb 2017)
 # modified by DZ (Aug 2022) 
 # modified by sg (mar 25) - Added internal logging
 # manual starts rtkrcv to avoid the segmentation faul issue of rtklib 2.4.3 b26
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lzer0.config.sh"
 #
 #********************  DEFAULTS ********************
-set JOB         		= `basename $0`
-set CURDIR      		= `pwd`
-set RUNNINGSCRIPT 		= rtkrcv
-set KEYWORD1 			= 2950
-set KEYWORD2 			= rtkrcv.curr.conf
-set RUNNINGSCRIPT_STATUS        = `ps -ef | grep $RUNNINGSCRIPT | grep $KEYWORD1 |  grep $KEYWORD1 | grep -v $JOB | grep -v grep | wc -l`
-set RUNNINGSCRIPT_PID           = `ps -ef | grep $RUNNINGSCRIPT | grep $KEYWORD1 |  grep $KEYWORD1 | grep -v $JOB | grep -v grep | gawk '{print $2}'`
-set LOG_DIR                     = $HOME/log
-set LOG_FILE                    = $LOG_DIR/lzer0.start.rtk.log
+JOB="$(basename "$0")"
+CURDIR="$(pwd)"
+RUNNINGSCRIPT=rtkrcv
+KEYWORD1=${LZERO_RTKRCV_TELNET_PORT}
+KEYWORD2=rtkrcv.curr.conf
+RUNNINGSCRIPT_STATUS="$(ps -ef | grep "$RUNNINGSCRIPT" | grep "$KEYWORD1" | grep "$KEYWORD1" | grep -v "$JOB" | grep -v grep | wc -l)"
+RUNNINGSCRIPT_PID="$(ps -ef | grep "$RUNNINGSCRIPT" | grep "$KEYWORD1" | grep "$KEYWORD1" | grep -v "$JOB" | grep -v grep | gawk '{print $2}')"
+LOG_DIR="$LZERO_LOG_DIR"
+LOG_FILE="$LOG_DIR/lzer0.start.rtk.log"
 
 # Create log directory if it doesn't exist
-if (! -d $LOG_DIR) then
-    mkdir -p $LOG_DIR
-    echo "`date`: Created log directory $LOG_DIR" >> $LOG_FILE
-endif
+if [[ ! -d "$LOG_DIR" ]]; then
+    mkdir -p "$LOG_DIR"
+    echo "$(date): Created log directory $LOG_DIR" >> "$LOG_FILE"
+fi
 
 # Function to log messages
-alias log 'echo "`date`: \!*" >> $LOG_FILE'
+log() {
+    echo "$(date): $*" >> "$LOG_FILE"
+}
 
 log "Script started"
 #
 # If no arguments are passed it outputs script usage
-if (${%argv} == 0) then
+if [[ $# -eq 0 ]]; then
         echo "- USAGE: $JOB -f [config file]"
         echo "    e.g: $JOB -f $HOME/cfg/rtkrcv.curr.conf"
         log "No arguments provided, exiting"
         exit 1
-endif
+fi
 #
 # check command line params.
-while($#)
-        switch($1)
-                case "-f":
+while [[ $# -gt 0 ]]; do
+        case "$1" in
+                "-f")
                         shift
-                        set cfgFile	= $1
+                        cfgFile="$1"
                         log "Configuration file set to $cfgFile"
-                        breaksw
-                default:
-                        breaksw
-        endsw
+                        ;;
+                *)
+                        ;;
+        esac
         shift
-end
+done
 #
 # CHECK if another rtkrcv is running with the same telnet port and configuration
-if ( $RUNNINGSCRIPT_STATUS) then
-        echo $RUNNINGSCRIPT is runnning with PID $RUNNINGSCRIPT_PID. Stop it before restarting!
+if (( RUNNINGSCRIPT_STATUS )); then
+        echo "$RUNNINGSCRIPT is runnning with PID $RUNNINGSCRIPT_PID. Stop it before restarting!"
         log "$RUNNINGSCRIPT is already running with PID $RUNNINGSCRIPT_PID. Exiting."
 else
-        echo $RUNNINGSCRIPT is stopped... Restarting now!
+        echo "$RUNNINGSCRIPT is stopped... Restarting now!"
         log "$RUNNINGSCRIPT is stopped. Restarting now."
         
         # Change to log directory for trace files
-        cd $LOG_DIR
+        cd "$LOG_DIR" || exit 1
         log "Changed directory to $LOG_DIR"
         
         # Start rtkrcv
-        nohup /usr/local/bin/rtkrcv -p 2950 -o $cfgFile & 
+        nohup /usr/local/bin/rtkrcv -p "$LZERO_RTKRCV_TELNET_PORT" -o "$cfgFile" &
         log "Started rtkrcv with configuration $cfgFile"
 
         sleep 3
@@ -71,9 +75,9 @@ else
         log "Attempting manual start via telnet"
         (echo admin; sleep 1; \
                 echo "start\r\n"; sleep 1; \
-                echo "exit\r\n"; sleep 1) | telnet localhost 2950
+                echo "exit\r\n"; sleep 1) | telnet localhost "$LZERO_RTKRCV_TELNET_PORT"
         
         log "Manual start completed"
-endif
+fi
 
 log "Script execution completed"

@@ -5,11 +5,13 @@
 #
 # Usage: cleanup_old_gnss.sh [DAYS]
 # Example: cleanup_old_gnss.sh 10
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lzer0.config.sh"
 
 # Default values
-STORAGE="/mnt/hd"
-GNSS_DIR="${STORAGE}/gnss"
-LOGDIR="/home/${USER}/log"
+STORAGE="${LZERO_STORAGE_MOUNT}"
+GNSS_DIR="${LZERO_GNSS_DIR}"
+LOGDIR="${LZERO_LOG_DIR}"
 LOGFILE="${LOGDIR}/cleanup_old_gnss.log"
 DEVICE="/dev/sda1"
 

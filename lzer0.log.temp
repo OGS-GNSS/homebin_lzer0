@@ -1,8 +1,10 @@
 #!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lzer0.config.sh"
 
 # Percorso del file di log
 AM_PM=$(date '+%p')
-LOG_FILE="/home/lzer0/log/lzer0.temp.log"
+LOG_FILE="${LZERO_LOG_DIR}/lzer0.temp.log"
 # Data e ora attuali
 DATE_TIME=$(date '+%Y-%m-%d %H:%M:%S')
 
@@ -36,4 +38,3 @@ TOP_PROCESSES=$(top -b -o %CPU -n1 | head -n 12 | tail -n 5 | awk '{print $1, $1
  # echo "Parent process of gzip (if any): $PARENT_PROCESS"
 
 } >> $LOG_FILE
-

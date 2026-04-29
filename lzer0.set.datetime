@@ -1,4 +1,6 @@
 #!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lzer0.config.sh"
 
 # Script per verificare la sincronizzazione NTP e impostare l'ora se necessario
 
@@ -7,13 +9,13 @@ set_time_manually() {
     echo "Recupero l'ora corretta dallo script lzer0.get.datetime..."
     
     # Verifica se lo script esiste ed è eseguibile
-    if [ ! -x "$(command -v /home/lzer0/bin/lzer0.get.datetime)" ]; then
+    if [ ! -x "$(command -v "${LZERO_BIN_DIR}/lzer0.get.datetime")" ]; then
         echo "Lo script lzer0.get.datetime non è disponibile o non è eseguibile."
         return 1
     fi
     
     # Esegui lo script e salva l'output
-    datetime_output=$(/home/lzer0/bin/lzer0.get.datetime)
+    datetime_output=$("${LZERO_BIN_DIR}/lzer0.get.datetime")
     
     # Verifica che l'output sia nel formato atteso (2025/04/29 09:40:51.00)
     if [[ ! $datetime_output =~ ^[0-9]{4}/[0-9]{2}/[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{2}$ ]]; then

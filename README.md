@@ -46,6 +46,65 @@ La cartella `bin` deve essere posizionata nella home dell’utente (ad esempio `
 
 ---
 
+## Configurazione Centralizzata
+
+Gli script leggono le impostazioni comuni da un file d'ambiente in formato shell:
+
+```bash
+KEY=value
+```
+
+Il file di riferimento incluso nel repository e `lzer0.env`. In installazione, la posizione consigliata e:
+
+```bash
+/home/lzer0/cfg/lzer0.env
+```
+
+Gli script cercano il file in questo ordine:
+
+1. percorso indicato dalla variabile `LZERO_ENV_FILE`, se impostata;
+2. `${HOME}/cfg/lzer0.env`;
+3. `lzer0.env` nella stessa cartella degli script.
+
+Esempio di configurazione:
+
+```bash
+LZERO_HOME=/home/lzer0
+LZERO_BIN_DIR=${LZERO_HOME}/bin
+LZERO_CONFIG_DIR=${LZERO_HOME}/cfg
+LZERO_LOG_DIR=${LZERO_HOME}/log
+LZERO_VAR_DIR=${LZERO_HOME}/var
+LZERO_TMP_DIR=${LZERO_HOME}/tmp/tmp.lzer0
+LZERO_STORAGE_MOUNT=/mnt/hd
+LZERO_GNSS_DIR=${LZERO_STORAGE_MOUNT}/gnss
+
+LZERO_SITE_CONFIG=${LZERO_CONFIG_DIR}/sites.cfg
+LZERO_RTKRCV_CONFIG=${LZERO_CONFIG_DIR}/rtkrcv.curr.conf
+LZERO_RNX2RTKP_CONFIG=${LZERO_CONFIG_DIR}/rnx2rtkp.curr.conf
+LZERO_STATION_POS_FILE=${LZERO_HOME}/tab/station.pos
+
+LZERO_RTKRCV_TELNET_PORT=2950
+LZERO_RAW_TCP_PORT=2222
+LZERO_RTCM_TCP_PORT=3333
+LZERO_POS_TCP_PORT=5754
+
+LZERO_SERIAL_USB_DEVICE=ttyACM0
+LZERO_SERIAL_UART_DEVICE=ttyS0
+
+LZERO_STORAGE_USE_LIMIT=90
+LZERO_CLEANUP_MIN_FREE_GB=15
+```
+
+Per usare un file in una posizione diversa, esportare `LZERO_ENV_FILE` prima di eseguire gli script o nel crontab:
+
+```bash
+LZERO_ENV_FILE=/percorso/personalizzato/lzer0.env
+```
+
+Se il file non esiste, gli script usano valori di default compatibili con l'installazione storica in `/home/lzer0`, storage in `/mnt/hd` e dati GNSS in `/mnt/hd/gnss`.
+
+---
+
 ## Struttura dei Crontab
 
 Il funzionamento del sistema si basa su due crontab distinti: uno per l’utente **lzer0** e uno per **root**.
