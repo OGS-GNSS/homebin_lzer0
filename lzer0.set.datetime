@@ -1,90 +1,123 @@
 #!/bin/bash
 
-# Script per verificare la sincronizzazione NTP e impostare l'ora se necessario
+# Script per impostare l'ora del sistema usando il GPS
+# Solo se chrony non è sincronizzato con i server NTP.
+# Compatibile con chrony (e ntpd, via date -s come ultima risorsa).
 
-# Funzione per impostare l'ora manualmente
-set_time_manually() {
-    echo "Recupero l'ora corretta dallo script lzer0.get.datetime..."
-    
-    # Verifica se lo script esiste ed è eseguibile
-    if [ ! -x "$(command -v /home/lzer0/bin/lzer0.get.datetime)" ]; then
-        echo "Lo script lzer0.get.datetime non è disponibile o non è eseguibile."
+# Funzione: verifica se chrony è sincronizzato
+is_chrony_synchronized() {
+    # Se chrony non è installato, considera non sincronizzato
+    if ! command -v chronyc &> /dev/null; then
         return 1
     fi
-    
-    # Esegui lo script e salva l'output
+
+    # Verifica se chronyd è in esecuzione
+    if ! systemctl is-active --quiet chrony 2>/dev/null; then
+        return 1
+    fi
+
+    # Controlla lo stato della sincronizzazione
+    # Campo "Leap status : Normal" indica sincronizzazione completata
+    # Campi "System time : ..." e "Leap status : Not synchronised" indicano il contrario
+    local tracking
+    tracking=$(chronyc tracking 2>/dev/null)
+    if [ -z "$tracking" ]; then
+        return 1
+    fi
+
+    if echo "$tracking" | grep -q "Leap status.*: Normal"; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Funzione: ottieni ora dal GPS (formato "YYYY-MM-DD HH:MM:SS")
+get_gps_time() {
+    if [ ! -x "/home/lzer0/bin/lzer0.get.datetime" ]; then
+        echo "ERRORE: lzer0.get.datetime non trovato o non eseguibile"
+        return 1
+    fi
+
+    local datetime_output
     datetime_output=$(/home/lzer0/bin/lzer0.get.datetime)
-    
-    # Verifica che l'output sia nel formato atteso (2025/04/29 09:40:51.00)
+
+    # Formato atteso: "2025/04/29 09:40:51.00"
     if [[ ! $datetime_output =~ ^[0-9]{4}/[0-9]{2}/[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{2}$ ]]; then
-        echo "Formato di data/ora non valido: $datetime_output"
+        echo "ERRORE: formato GPS non valido: $datetime_output"
         return 1
     fi
-    
-    # Rimuovi la parte dei centesimi di secondo e converti il formato da 2025/04/29 09:40:51.00 a 2025-04-29 09:40:51
-    formatted_datetime=$(echo "$datetime_output" | sed 's/\([0-9]\{4\}\)\/\([0-9]\{2\}\)\/\([0-9]\{2\}\) \([0-9]\{2\}\):\([0-9]\{2\}\):\([0-9]\{2\}\)\.[0-9]\{2\}/\1-\2-\3 \4:\5:\6/')
-    
-    echo "Imposto la data e l'ora a: $formatted_datetime"
-    
-    # Imposta la data e l'ora del sistema
-    if sudo date -s "$formatted_datetime"; then
-        echo "Data e ora impostate con successo."
-        # Opzionale: scrivi la data nel clock hardware
+
+    # Converte in "YYYY-MM-DD HH:MM:SS"
+    echo "$datetime_output" | sed 's/\([0-9]\{4\}\)\/\([0-9]\{2\}\)\/\([0-9]\{2\}\) \([0-9]\{2\}\):\([0-9]\{2\}\):\([0-9]\{2\}\)\.[0-9]\{2\}/\1-\2-\3 \4:\5:\6/'
+    return 0
+}
+
+# Funzione: imposta l'ora via chronyc
+set_time_via_chrony() {
+    local new_time="$1"
+    echo "Tento impostazione via chrony: $new_time"
+    # Richiede chronyd attivo (già verificato prima di chiamare questa funzione)
+    if sudo chronyc -a "settime $new_time" >/dev/null 2>&1; then
+        echo "Ora inviata a chrony."
+        sudo chronyc -a makestep >/dev/null 2>&1
+        return 0
+    else
+        echo "ERRORE: chronyc settime fallito"
+        return 1
+    fi
+}
+
+# Funzione: imposta l'ora via date (fallback)
+set_time_via_date() {
+    local new_time="$1"
+    echo "Imposto ora via date: $new_time"
+    if sudo date -s "$new_time"; then
+        echo "Ora di sistema aggiornata."
         if command -v hwclock &> /dev/null; then
             sudo hwclock -w
-            echo "Data e ora sincronizzate con l'hardware clock."
+            echo "Hardware clock sincronizzato."
         fi
         return 0
     else
-        echo "Errore nell'impostazione della data e dell'ora."
+        echo "ERRORE: comando date fallito"
         return 1
     fi
 }
 
-# Funzione per verificare lo stato NTP
-check_ntp_status() {
-    # Verifica se ntpq è installato
-    if ! command -v ntpq &> /dev/null; then
-        echo "ntpq non è installato. Verifico con timedatectl..."
-        if command -v timedatectl &> /dev/null; then
-            # Usa timedatectl per verificare la sincronizzazione
-            if timedatectl status | grep -q "synchronized: yes"; then
-                return 0 # Sincronizzato
-            else
-                return 1 # Non sincronizzato
-            fi
-        else
-            echo "Impossibile verificare lo stato NTP. Assumo non sincronizzato."
-            return 1
-        fi
-    fi
+# ---- Main ----
+echo "=== lzer0.set.datetime: $(date) ==="
 
-    # Usa ntpq per verificare lo stato NTP
-    # Controlla se ci sono server con * o + (indica sincronizzazione)
-    # Uso head per evitare il broken pipe error quando grep trova una corrispondenza e chiude la pipe
-    if ntpq -p 2>/dev/null | head -n 20 | grep -q '^\*\|^\+'; then
-        echo "NTP è sincronizzato correttamente."
-        return 0 # Sincronizzato
-    else
-        echo "NTP non è sincronizzato."
-        return 1 # Non sincronizzato
-    fi
-}
-
-# Esecuzione principale
-echo "Tentativo di impostazione manuale dell'ora..."
-
-if set_time_manually; then
-    echo "Ora impostata manualmente con successo."
-else
-    echo "Impossibile impostare l'ora manualmente. Controllo lo stato di sincronizzazione NTP..."
-    
-    if check_ntp_status; then
-        echo "Il sistema è correttamente sincronizzato con NTP."
-    else
-        echo "ATTENZIONE: Né l'impostazione manuale né la sincronizzazione NTP sono disponibili."
-        exit 1
-    fi
+# Se chrony è già sincronizzato, non fare nulla
+if is_chrony_synchronized; then
+    echo "chrony è già sincronizzato con i server NTP. Nessuna azione necessaria."
+    exit 0
 fi
 
-exit 0
+echo "chrony non è sincronizzato (o non attivo). Uso il GPS come fallback."
+
+# Ottieni ora dal GPS
+if ! gps_time=$(get_gps_time); then
+    echo "Impossibile ottenere l'ora GPS. Uscita."
+    exit 1
+fi
+echo "Ora GPS rilevata: $gps_time"
+
+# Prova prima con chronyc (se chronyd è attivo ma non sincronizzato)
+if systemctl is-active --quiet chrony 2>/dev/null; then
+    echo "chronyd attivo, uso chronyc per impostare l'ora."
+    if set_time_via_chrony "$gps_time"; then
+        echo "Ora impostata via chrony."
+        exit 0
+    fi
+    echo "Fallimento chronyc, provo con date..."
+fi
+
+# Ultima risorsa: date -s
+if set_time_via_date "$gps_time"; then
+    echo "Ora impostata via date."
+    exit 0
+else
+    echo "ERRORE: impossibile impostare l'ora."
+    exit 1
+fi
